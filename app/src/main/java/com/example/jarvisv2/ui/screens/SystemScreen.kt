@@ -53,15 +53,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.jarvisv2.ui.theme.DarkOnSurface
 import com.example.jarvisv2.ui.theme.DarkPrimary
+// --- IMPORT THE COLOR HERE ---
+import com.example.jarvisv2.ui.theme.DarkSurface
 import com.example.jarvisv2.viewmodel.MainViewModel
 import kotlin.math.roundToInt
-
-// --- 1. DEFINITIONS SPLIT INTO TWO LISTS ---
 
 // List 1: For the new horizontal row card
 private val windowRowActions = listOf(
     Action("Minimize", Icons.Default.Minimize, "minimize window"),
-    Action("Fullscreen", Icons.Default.Fullscreen, "fullscreen"), // Using Fullscreen for "maximize"
+    Action("Fullscreen", Icons.Default.Fullscreen, "fullscreen"),
     Action("Close", Icons.Default.Close, "close window")
 )
 
@@ -73,20 +73,16 @@ private val systemGridActions = listOf(
     Action("Sleep", Icons.Default.Bedtime, "sleep system"),
 )
 
-// --- 3. SystemScreen COMPOSABLE UPDATED ---
 @Composable
 fun SystemScreen(viewModel: MainViewModel) {
-    // --- WRAP THE SCREEN IN A COLUMN ---
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        // --- ADD THE NEW MEDIA SEARCH INPUT AT THE TOP ---
         MediaSearchInput(viewModel = viewModel)
 
-        // --- 4. NEW CARD ADDED HERE ---
+        // --- THIS CARD IS NOW FIXED ---
         WindowActionsCard(viewModel = viewModel)
 
-        // --- THE EXISTING GRID IS NOW THE SECOND ITEM IN THE COLUMN ---
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 110.dp),
             contentPadding = PaddingValues(16.dp),
@@ -100,7 +96,6 @@ fun SystemScreen(viewModel: MainViewModel) {
                 BrightnessSlider(viewModel)
             }
 
-            // --- 5. GRID UPDATED TO USE THE NEW LIST ---
             items(systemGridActions) { action ->
                 ActionButton(
                     icon = action.icon,
@@ -113,14 +108,16 @@ fun SystemScreen(viewModel: MainViewModel) {
     }
 }
 
-// --- 2. NEW COMPOSABLE FOR THE HORIZONTAL CARD ---
 @Composable
 private fun WindowActionsCard(viewModel: MainViewModel) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        elevation = CardDefaults.cardElevation(4.dp)
+        elevation = CardDefaults.cardElevation(4.dp),
+        // --- THIS IS THE FIX ---
+        // Set the container color to DarkSurface to match the ActionButton
+        colors = CardDefaults.cardColors(containerColor = DarkSurface)
     ) {
         Row(
             modifier = Modifier
@@ -129,9 +126,7 @@ private fun WindowActionsCard(viewModel: MainViewModel) {
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Iterate over the new list
             windowRowActions.forEach { action ->
-                // Create a small, clickable column for each button
                 Column(
                     modifier = Modifier
                         .clip(RoundedCornerShape(8.dp))
@@ -159,7 +154,6 @@ private fun WindowActionsCard(viewModel: MainViewModel) {
 }
 
 
-// --- NEW COMPOSABLE FOR THE MEDIA SEARCH BAR ---
 @Composable
 fun MediaSearchInput(viewModel: MainViewModel) {
     var text by remember { mutableStateOf("") }
@@ -171,7 +165,6 @@ fun MediaSearchInput(viewModel: MainViewModel) {
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // --- TOGGLE BUTTONS FOR SPOTIFY/YOUTUBE ---
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -205,7 +198,6 @@ fun MediaSearchInput(viewModel: MainViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --- TEXT INPUT BAR ---
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
@@ -215,16 +207,13 @@ fun MediaSearchInput(viewModel: MainViewModel) {
                 IconButton(onClick = {
                     val query = text.trim()
                     if (query.isNotEmpty()) {
-                        // Construct the command based on the selected source
                         val command = if (selectedSource == "spotify") {
                             "play $query on spotify"
                         } else {
                             "play $query" // This is the command for YouTube
                         }
 
-                        // Use the silent button command function
                         viewModel.sendButtonCommand(command)
-
                         text = "" // Clear text
                         focusManager.clearFocus() // Hide keyboard
                     }

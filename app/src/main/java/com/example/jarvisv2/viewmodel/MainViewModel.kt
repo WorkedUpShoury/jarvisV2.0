@@ -29,7 +29,7 @@ import kotlinx.parcelize.Parcelize
 
 class MainViewModel(
     private val app: Application,
-    private val savedStateHandle: SavedStateHandle // Correctly injected
+    private val savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(app) {
 
     private val apiClient = JarvisApiClient(app.applicationContext)
@@ -47,7 +47,7 @@ class MainViewModel(
         savedStateHandle.getStateFlow("chatHistory", emptyList())
 
     // --- FIX 2: Persist lastEventId in the SavedStateHandle ---
-    val lastEventId: StateFlow<Int> =
+    private val lastEventId: StateFlow<Int> =
         savedStateHandle.getStateFlow("lastEventId", 0)
 
     // This holds the last command sent from a button, so we can ignore its spoken response.
@@ -65,14 +65,14 @@ class MainViewModel(
     val isVoiceServiceRunning: StateFlow<ServiceState> =
         JarvisVoiceService.serviceState.stateIn(
             viewModelScope,
-            SharingStarted.Eagerly,
+            SharingStarted.Eagerly, // <-- THIS IS THE FIX
             ServiceState.Stopped
         )
 
     val detailedVoiceState: StateFlow<VoiceListener.VoiceState> =
         JarvisVoiceService.detailedVoiceState.stateIn(
             viewModelScope,
-            SharingStarted.Eagerly,
+            SharingStarted.Eagerly, // <-- THIS IS THE FIX
             VoiceListener.VoiceState.Stopped
         )
 
@@ -100,10 +100,9 @@ class MainViewModel(
                 _serverUrl.value = url
                 _isDiscovering.value = false
 
-                // --- FIX 1: This message is removed ---
-                // It was causing a race condition that wiped the chat history.
-                // The green connection icon in the TopAppBar provides this
-                // feedback to the user without causing a bug.
+                // --- FIX 1: This block is removed ---
+                // This was the source of the race condition that wiped your chat history.
+                // The connection icon in the top bar is enough feedback.
                 /*
                 if (chatHistory.value.none { it.message.startsWith("Jarvis server found") }) {
                     addChatMessage("Jarvis server found at $url", ChatSender.System)
@@ -134,7 +133,7 @@ class MainViewModel(
             serverUrl.collect { url ->
                 if (url != null) {
                     while (true) {
-                        // --- FIX 2: Use the persisted lastEventId ---
+                        // --- FIX 2: Use the persisted lastEventId.value ---
                         val result: Result<JarvisEventResponse> = apiClient.getEvents(url, lastEventId.value)
                         result.fold(
                             onSuccess = { response ->
@@ -152,7 +151,7 @@ class MainViewModel(
                                         }
                                     }
                                 }
-                                // --- FIX 2: Save the new lastEventId ---
+                                // --- FIX 2: Save the new lastEventId to the SavedStateHandle ---
                                 savedStateHandle["lastEventId"] = response.last_id
                             },
                             onFailure = { delay(5000) }

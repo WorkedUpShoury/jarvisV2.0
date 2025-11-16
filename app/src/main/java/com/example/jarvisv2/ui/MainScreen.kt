@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.example.jarvisv2.data.quickCommands
 import com.example.jarvisv2.service.JarvisVoiceService
 import com.example.jarvisv2.service.JarvisVoiceService.Companion.ServiceState
+import com.example.jarvisv2.ui.components.VoiceStatusIcon
 import com.example.jarvisv2.ui.theme.DarkError
 import com.example.jarvisv2.ui.theme.DarkOnPrimary
 import com.example.jarvisv2.ui.theme.DarkOnSurface
@@ -56,9 +57,6 @@ fun MainScreen(
     val chatHistory by viewModel.chatHistory.collectAsState()
     val suggestions by viewModel.suggestions.collectAsState()
 
-    /**
-     * ✔ This now matches the enum version exactly
-     */
     val isVoiceServiceRunning by viewModel.isVoiceServiceRunning.collectAsState()
 
     val listState = rememberLazyListState()
@@ -78,12 +76,10 @@ fun MainScreen(
                     titleContentColor = DarkOnSurface
                 ),
                 actions = {
-                    VoiceServiceToggleButton(
-                        /**
-                         * ✔ comparison is now correct
-                         */
-                        isRunning = isVoiceServiceRunning == ServiceState.Running,
-                        onClick = onToggleVoiceService
+                    // Use the detailed VoiceStatusIcon
+                    VoiceStatusIcon(
+                        detailedStateFlow = viewModel.detailedVoiceState,
+                        onToggle = onToggleVoiceService
                     )
                 },
                 navigationIcon = {
@@ -126,7 +122,9 @@ fun MainScreen(
                         command = command.description,
                         icon = command.icon
                     ) {
-                        viewModel.sendCommand(command.command)
+                        // --- THIS IS THE FIX ---
+                        // Use the silent 'sendButtonCommand'
+                        viewModel.sendButtonCommand(command.command)
                     }
                 }
             }
@@ -173,6 +171,9 @@ fun ConnectionStatusIcon(serverUrl: String?, isDiscovering: Boolean) {
     }
 }
 
+// This composable is in MainScreen.kt, but we already have an
+// identical one in UiComponents.kt (VoiceStatusIcon).
+// We'll keep this one as it's scoped to the (now unused) MainScreen.
 @Composable
 fun VoiceServiceToggleButton(isRunning: Boolean, onClick: () -> Unit) {
     IconButton(onClick = onClick) {
@@ -203,7 +204,9 @@ fun QuickCommandButton(command: String, icon: androidx.compose.ui.graphics.vecto
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(70.dp).padding(vertical = 4.dp)
+            modifier = Modifier
+                .width(70.dp)
+                .padding(vertical = 4.dp)
         ) {
             if (icon != null) {
                 Icon(

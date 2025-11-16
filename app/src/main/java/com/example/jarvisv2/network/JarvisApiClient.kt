@@ -10,15 +10,16 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.logging.LogLevel
 import io.ktor.client.plugins.logging.Logger
 import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.awaitClose // <-- YOUR FIX: Import awaitClose
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow // <-- YOUR FIX: Import callbackFlow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -33,14 +34,29 @@ data class JarvisCommandRequest(val command: String, val token: String)
 @Serializable
 data class JarvisCommandResponse(val ok: Boolean, val request_id: String)
 
+// --- NEW DATA CLASSES FOR EVENT POLLING ---
+@Serializable
+data class JarvisEvent(
+    val id: Int,
+    val ts: Double,
+    val type: String, // We will look for "speak"
+    val text: String
+)
+
+@Serializable
+data class JarvisEventResponse(
+    val events: List<JarvisEvent>,
+    val last_id: Int
+)
+// ----------------------------------------
+
 class JarvisApiClient(private val context: Context) {
 
     private val client = HttpClient(Android) {
-        expectSuccess = true
+        expectSuccess = false // Handle non-200 responses manually if needed
         install(ContentNegotiation) {
             json()
         }
-        // This Ktor logging now works because we added the library
         install(Logging) {
             level = LogLevel.ALL
             logger = object : Logger {
@@ -53,7 +69,6 @@ class JarvisApiClient(private val context: Context) {
 
     private val apiToken = "jarvisrunning"
 
-    // This function now correctly uses callbackFlow, as you suggested
     fun discoverJarvisService(): Flow<String> = callbackFlow {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val lock = wifiManager.createMulticastLock("JarvisAppLock")
@@ -93,7 +108,7 @@ class JarvisApiClient(private val context: Context) {
                     if (host != null && port != 0) {
                         val url = "http://$host:$port"
                         Log.d("JarvisApiClient", "Jarvis found at: $url")
-                        trySend(url) // <-- YOUR FIX: Use trySend
+                        trySend(url)
                     }
                 }
             }
@@ -106,7 +121,6 @@ class JarvisApiClient(private val context: Context) {
             close(e) // Close the flow with the exception
         }
 
-        // YOUR FIX: This block is executed when the flow is cancelled
         awaitClose {
             Log.d("JarvisApiClient", "Closing mDNS discovery.")
             if (jmdns != null && serviceListener != null) {
@@ -117,7 +131,7 @@ class JarvisApiClient(private val context: Context) {
                 lock.release()
             }
         }
-    }.flowOn(Dispatchers.IO) // flowOn is still correct to use here
+    }.flowOn(Dispatchers.IO)
 
     @Suppress("DEPRECATION")
     private fun getLocalIpAddress(wifiManager: WifiManager): String? {
@@ -144,6 +158,23 @@ class JarvisApiClient(private val context: Context) {
                 Result.success(response)
             } catch (e: Exception) {
                 Log.e("JarvisApiClient", "Failed to send command: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+    }
+
+    // --- NEW FUNCTION FOR EVENT POLLING ---
+    suspend fun getEvents(serverUrl: String, since: Int): Result<JarvisEventResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response: JarvisEventResponse = client.get("$serverUrl/events") {
+                    url {
+                        parameters.append("since", since.toString())
+                    }
+                }.body()
+                Result.success(response)
+            } catch (e: Exception) {
+                Log.e("JarvisApiClient", "Failed to get events: ${e.message}", e)
                 Result.failure(e)
             }
         }

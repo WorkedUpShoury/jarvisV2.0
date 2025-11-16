@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.23"
+    id("kotlin-parcelize") // <-- ADDED FOR PERSISTENT CHAT
 }
 
 android {
@@ -15,6 +16,7 @@ android {
         versionCode = 1
         versionName = "1.0"
         multiDexEnabled = true
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -26,6 +28,7 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
+
                 "proguard-rules.pro"
             )
         }
@@ -39,13 +42,13 @@ android {
     }
     buildFeatures {
         compose = true
+
     }
 
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.11"
     }
     // The version is now controlled by the BOM in dependencies.
-
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -91,6 +94,7 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)

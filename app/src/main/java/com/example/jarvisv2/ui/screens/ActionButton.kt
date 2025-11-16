@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.sp
 import com.example.jarvisv2.ui.theme.DarkOnSurface
 import com.example.jarvisv2.ui.theme.DarkPrimary
 import com.example.jarvisv2.ui.theme.DarkSurface
+import com.example.jarvisv2.viewmodel.MainViewModel
 
 @Composable
 fun ActionButton(
@@ -20,8 +21,8 @@ fun ActionButton(
     subtitle: String? = null,
     onClick: () -> Unit
 ) {
-    // PERFECT for Option B (balanced)
     ElevatedCard(
+        onClick = onClick, // <-- This is the fix
         modifier = modifier
             .height(110.dp)
             .aspectRatio(1f),
@@ -68,4 +69,27 @@ fun ActionButton(
             }
         }
     }
+}
+
+/**
+ * --- NEW OVERLOAD ---
+ * This overload makes it easier to call from other screens
+ * and ensures we use the silent `sendButtonCommand`.
+ */
+@Composable
+fun ActionButton(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    text: String,
+    subtitle: String? = null,
+    viewModel: MainViewModel,
+    command: String
+) {
+    ActionButton(
+        modifier = modifier,
+        icon = icon,
+        text = text,
+        subtitle = subtitle,
+        onClick = { viewModel.sendButtonCommand(command) } // <-- Calls silent command
+    )
 }

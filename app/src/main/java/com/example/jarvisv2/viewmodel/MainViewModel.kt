@@ -2,21 +2,35 @@ package com.example.jarvisv2.viewmodel
 
 import android.app.Application
 import android.content.Intent
+import android.os.Parcelable
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.jarvisv2.data.allCommands
 import com.example.jarvisv2.network.JarvisApiClient
+import com.example.jarvisv2.network.JarvisCommandResponse
+import com.example.jarvisv2.network.JarvisEventResponse
 import com.example.jarvisv2.service.JarvisVoiceService
 import com.example.jarvisv2.service.JarvisVoiceService.Companion.ServiceState
+import com.example.jarvisv2.service.VoiceListener
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.parcelize.Parcelize
 
-class MainViewModel(private val app: Application) : AndroidViewModel(app) {
+class MainViewModel(
+    private val app: Application,
+    private val savedStateHandle: SavedStateHandle
+) : AndroidViewModel(app) {
 
     private val apiClient = JarvisApiClient(app.applicationContext)
 
@@ -28,13 +42,14 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     private val _isDiscovering = MutableStateFlow(true)
     private val _lastCommandStatus = MutableStateFlow<CommandStatus>(CommandStatus.Idle)
     private val _commandText = MutableStateFlow("")
-    private val _chatHistory = MutableStateFlow<List<ChatMessage>>(emptyList())
 
-    // Play dialog (new)
-    private val _showPlayDialog = MutableStateFlow(false)
-    val showPlayDialog: StateFlow<Boolean> = _showPlayDialog.asStateFlow()
-    fun onPlayClicked() { _showPlayDialog.value = true }
-    fun onPlayDialogDismiss() { _showPlayDialog.value = false }
+    val chatHistory: StateFlow<List<ChatMessage>> =
+        savedStateHandle.getStateFlow("chatHistory", emptyList())
+
+    private var lastEventId = 0
+
+    // This holds the last command sent from a button, so we can ignore its spoken response.
+    private val _lastButtonCommand = MutableStateFlow<String?>(null)
 
     // -----------------------------------------------------------------------------------------
     // PUBLIC STATES (for UI)
@@ -44,21 +59,21 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     val isDiscovering: StateFlow<Boolean> = _isDiscovering.asStateFlow()
     val lastCommandStatus: StateFlow<CommandStatus> = _lastCommandStatus.asStateFlow()
     val commandText: StateFlow<String> = _commandText.asStateFlow()
-    val chatHistory: StateFlow<List<ChatMessage>> = _chatHistory.asStateFlow()
 
-    /**
-     * Lifecycle-aware wrapper for service state
-     */
     val isVoiceServiceRunning: StateFlow<ServiceState> =
         JarvisVoiceService.serviceState.stateIn(
             viewModelScope,
-            SharingStarted.Eagerly,
+            SharingStarted.Eagerly, // <-- THIS IS THE FIX
             ServiceState.Stopped
         )
 
-    /**
-     * Slash command suggestions.
-     */
+    val detailedVoiceState: StateFlow<VoiceListener.VoiceState> =
+        JarvisVoiceService.detailedVoiceState.stateIn(
+            viewModelScope,
+            SharingStarted.Eagerly, // <-- THIS IS THE FIX
+            VoiceListener.VoiceState.Stopped
+        )
+
     val suggestions: StateFlow<List<String>> = _commandText
         .map { text ->
             if (text.startsWith("/")) {
@@ -73,6 +88,7 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
     init {
         startServerDiscovery()
         observeVoiceServiceCommands()
+        startEventPolling()
     }
 
     private fun startServerDiscovery() {
@@ -81,18 +97,58 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
             apiClient.discoverJarvisService().collect { url ->
                 _serverUrl.value = url
                 _isDiscovering.value = false
-                addChatMessage("Jarvis server found at $url", ChatSender.System)
+                // Don't add to chat if it's already there
+                if (chatHistory.value.none { it.message.startsWith("Jarvis server found") }) {
+                    addChatMessage("Jarvis server found at $url", ChatSender.System)
+                }
             }
         }
     }
 
     private fun observeVoiceServiceCommands() {
+        // Use a more robust flow chain
+        JarvisVoiceService.latestVoiceResult
+            .filter { it.isNotEmpty() } // 1. Only let non-empty commands pass
+            .onEach { command ->
+                // 2. This code now only runs for valid commands
+                Log.d("ViewModel", "Processing voice command: $command")
+                addChatMessage(command, ChatSender.User)
+                sendCommand(command)
+
+                // 3. Clear the command *after* processing
+                JarvisVoiceService.latestVoiceResult.value = ""
+            }
+            .launchIn(viewModelScope) // Launch this collector in the ViewModel's scope
+    }
+
+    private fun startEventPolling() {
         viewModelScope.launch {
-            JarvisVoiceService.latestVoiceResult.collect { command ->
-                if (command.isNotEmpty()) {
-                    addChatMessage(command, ChatSender.User)
-                    sendCommand(command)
-                    JarvisVoiceService.latestVoiceResult.value = ""
+            serverUrl.collect { url ->
+                if (url != null) {
+                    while (true) {
+                        val result: Result<JarvisEventResponse> = apiClient.getEvents(url, lastEventId)
+                        result.fold(
+                            onSuccess = { response ->
+                                val lastButtonCmd = _lastButtonCommand.value
+                                for (event in response.events) {
+                                    if (event.type == "speak") {
+                                        // Check if this "speak" event matches the last button command
+                                        if (lastButtonCmd != null && event.text.equals(lastButtonCmd, ignoreCase = true)) {
+                                            // It matches, so "swallow" it and don't add to chat
+                                            _lastButtonCommand.value = null // Clear the command
+                                            Log.d("ViewModel", "Swallowed button response: ${event.text}")
+                                        } else {
+                                            // Not a button response, so add it to the chat
+                                            addChatMessage(event.text, ChatSender.System)
+                                        }
+                                    }
+                                }
+                                lastEventId = response.last_id
+                            },
+                            onFailure = { delay(5000) }
+                        )
+                        delay(1000)
+                    }
                 }
             }
         }
@@ -108,26 +164,31 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
 
         val commandToSend = if (command.startsWith("/")) command.substring(1) else command
 
+        // 1. Add user's typed message to chat
         addChatMessage(commandToSend, ChatSender.User)
+        // 2. Send command to server
         sendCommand(commandToSend)
+        // 3. Clear text box
         _commandText.value = ""
     }
 
-    fun sendCommand(command: String) {
+    /**
+     * Sends a command that originated from chat or voice.
+     * The server's response WILL be added to the chat.
+     */
+    private fun sendCommand(command: String) {
         val url = _serverUrl.value
         if (url == null) {
-            _lastCommandStatus.value = CommandStatus.Error("Server not found.")
             addChatMessage("Error: Server not found.", ChatSender.System)
             return
         }
 
         viewModelScope.launch {
             _lastCommandStatus.value = CommandStatus.Loading
-            val result = apiClient.sendCommand(url, command)
+            val result: Result<JarvisCommandResponse> = apiClient.sendCommand(url, command)
             result.fold(
                 onSuccess = {
                     _lastCommandStatus.value = CommandStatus.Success
-                    addChatMessage("Command sent: $command", ChatSender.System)
                 },
                 onFailure = {
                     _lastCommandStatus.value = CommandStatus.Error(it.message ?: "Unknown error")
@@ -136,6 +197,19 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
             )
         }
     }
+
+    /**
+     * Sends a command from a button.
+     * The server's response will be "swallowed" and NOT added to the chat.
+     */
+    fun sendButtonCommand(command: String) {
+        // Set the command to be "swallowed"
+        _lastButtonCommand.value = command
+
+        // Send the command normally
+        sendCommand(command)
+    }
+
 
     fun toggleVoiceService() {
         val intent = Intent(app.applicationContext, JarvisVoiceService::class.java)
@@ -148,16 +222,13 @@ class MainViewModel(private val app: Application) : AndroidViewModel(app) {
 
     private fun addChatMessage(message: String, sender: ChatSender) {
         val chat = ChatMessage(message = message, sender = sender)
-        _chatHistory.value = _chat_history_plus(chat)
+        val currentHistory = chatHistory.value
+        savedStateHandle["chatHistory"] = currentHistory + chat
     }
-
-    // small helper to clone list (avoids some concurrency edge cases)
-    private fun _chat_history_plus(chat: ChatMessage): List<ChatMessage> =
-        synchronized(this) { _chatHistory.value + chat }
 }
 
 // ---------------------------------------------------------------------------------------------
-// SUPPORTING TYPES
+// SUPPORTING TYPES (Parcelable)
 // ---------------------------------------------------------------------------------------------
 
 sealed class CommandStatus {
@@ -167,12 +238,14 @@ sealed class CommandStatus {
     data class Error(val message: String) : CommandStatus()
 }
 
-enum class ChatSender {
+@Parcelize
+enum class ChatSender : Parcelable {
     User, System
 }
 
+@Parcelize
 data class ChatMessage(
     val message: String,
     val sender: ChatSender,
     val timestamp: Long = System.currentTimeMillis()
-)
+) : Parcelable

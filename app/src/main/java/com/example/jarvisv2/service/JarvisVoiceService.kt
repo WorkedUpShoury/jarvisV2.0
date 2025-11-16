@@ -29,9 +29,6 @@ class JarvisVoiceService : Service() {
 
     companion object {
 
-        /**
-         * ✔ FINAL ENUM — THIS MUST MATCH UI + VIEWMODEL
-         */
         enum class ServiceState {
             Running,
             Stopped,
@@ -39,7 +36,7 @@ class JarvisVoiceService : Service() {
         }
 
         /**
-         * Public global state
+         * Public global state (general On/Off)
          */
         var serviceState = MutableStateFlow(ServiceState.Stopped)
 
@@ -47,15 +44,17 @@ class JarvisVoiceService : Service() {
          * Latest voice command unwrapped from "Jarvis ..."
          */
         var latestVoiceResult = MutableStateFlow("")
+
+        /**
+         * Public detailed state from the VoiceListener itself.
+         */
+        var detailedVoiceState = MutableStateFlow<VoiceListener.VoiceState>(VoiceListener.VoiceState.Stopped)
     }
 
     override fun onCreate() {
         super.onCreate()
-
         Log.d("JarvisVoiceService", "Service onCreate")
-
         voiceListener = VoiceListener(this)
-
         serviceState.value = ServiceState.Running
     }
 
@@ -66,6 +65,10 @@ class JarvisVoiceService : Service() {
 
         voiceListener.voiceState
             .onEach { state ->
+
+                // Pipe the internal state to the public static state
+                detailedVoiceState.value = state
+
                 when (state) {
 
                     is VoiceListener.VoiceState.Result -> {
@@ -82,7 +85,6 @@ class JarvisVoiceService : Service() {
 
                     is VoiceListener.VoiceState.Error -> {
                         Log.e("JarvisVoiceService", "Voice Error: ${state.message}")
-                        serviceState.value = ServiceState.Error
                     }
 
                     else -> Unit
@@ -96,13 +98,11 @@ class JarvisVoiceService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-
         Log.d("JarvisVoiceService", "Service onDestroy")
-
         voiceListener.destroy()
         serviceJob.cancel()
-
         serviceState.value = ServiceState.Stopped
+        detailedVoiceState.value = VoiceListener.VoiceState.Stopped // Reset on destroy
     }
 
     private fun startForegroundWithNotification() {

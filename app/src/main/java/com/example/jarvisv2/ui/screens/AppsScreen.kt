@@ -22,10 +22,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.dp
 import com.example.jarvisv2.viewmodel.MainViewModel
 
-/**
- * List of commonly used apps & tools.
- * These buttons trigger remote commands.
- */
 private val appActions = listOf(
     Action("Spotify", Icons.Default.MusicNote, "open spotify"),
     Action("Chrome", Icons.Default.TravelExplore, "open chrome"),
@@ -50,10 +46,12 @@ fun AppsScreen(viewModel: MainViewModel) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         items(appActions) { action ->
+            // --- UPDATED to use the new ActionButton overload ---
             ActionButton(
                 icon = action.icon,
                 text = action.name,
-                onClick = { viewModel.sendCommand(action.command) }
+                viewModel = viewModel,
+                command = action.command
             )
         }
     }

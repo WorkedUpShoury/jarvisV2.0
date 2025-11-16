@@ -1,5 +1,6 @@
 package com.example.jarvisv2.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -26,6 +27,8 @@ import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,24 +44,36 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.jarvisv2.ui.theme.DarkOnSurface
 import com.example.jarvisv2.ui.theme.DarkPrimary
 import com.example.jarvisv2.viewmodel.MainViewModel
 import kotlin.math.roundToInt
 
-private val systemActions = listOf(
+// --- 1. DEFINITIONS SPLIT INTO TWO LISTS ---
+
+// List 1: For the new horizontal row card
+private val windowRowActions = listOf(
+    Action("Minimize", Icons.Default.Minimize, "minimize window"),
+    Action("Fullscreen", Icons.Default.Fullscreen, "fullscreen"), // Using Fullscreen for "maximize"
+    Action("Close", Icons.Default.Close, "close window")
+)
+
+// List 2: For the existing vertical grid
+private val systemGridActions = listOf(
     Action("Lock", Icons.Default.Lock, "lock screen"),
     Action("Shutdown", Icons.Default.PowerSettingsNew, "shutdown"),
     Action("Restart", Icons.Default.RestartAlt, "restart"),
     Action("Sleep", Icons.Default.Bedtime, "sleep system"),
-    Action("Close", Icons.Default.Close, "close window"),
-    Action("Fullscreen", Icons.Default.Fullscreen, "fullscreen"),
-    Action("Minimize", Icons.Default.Minimize, "minimize window"),
 )
 
+// --- 3. SystemScreen COMPOSABLE UPDATED ---
 @Composable
 fun SystemScreen(viewModel: MainViewModel) {
     // --- WRAP THE SCREEN IN A COLUMN ---
@@ -67,6 +82,9 @@ fun SystemScreen(viewModel: MainViewModel) {
     ) {
         // --- ADD THE NEW MEDIA SEARCH INPUT AT THE TOP ---
         MediaSearchInput(viewModel = viewModel)
+
+        // --- 4. NEW CARD ADDED HERE ---
+        WindowActionsCard(viewModel = viewModel)
 
         // --- THE EXISTING GRID IS NOW THE SECOND ITEM IN THE COLUMN ---
         LazyVerticalGrid(
@@ -82,7 +100,8 @@ fun SystemScreen(viewModel: MainViewModel) {
                 BrightnessSlider(viewModel)
             }
 
-            items(systemActions) { action ->
+            // --- 5. GRID UPDATED TO USE THE NEW LIST ---
+            items(systemGridActions) { action ->
                 ActionButton(
                     icon = action.icon,
                     text = action.name,
@@ -93,6 +112,52 @@ fun SystemScreen(viewModel: MainViewModel) {
         }
     }
 }
+
+// --- 2. NEW COMPOSABLE FOR THE HORIZONTAL CARD ---
+@Composable
+private fun WindowActionsCard(viewModel: MainViewModel) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Iterate over the new list
+            windowRowActions.forEach { action ->
+                // Create a small, clickable column for each button
+                Column(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { viewModel.sendButtonCommand(action.command) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = action.icon,
+                        contentDescription = action.name,
+                        tint = DarkPrimary,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = action.name,
+                        color = DarkOnSurface,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
 
 // --- NEW COMPOSABLE FOR THE MEDIA SEARCH BAR ---
 @Composable

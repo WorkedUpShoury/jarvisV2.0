@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- This is the bridge theme for our Jetpack Compose app. -->
+    <style name="Theme.JarvisV2" parent="android:Theme.Material.Light.NoActionBar">
+    </style>
+</resources>

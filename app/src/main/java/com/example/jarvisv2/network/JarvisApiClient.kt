@@ -1,0 +1,151 @@
+package com.example.jarvisv2.network
+
+import android.content.Context
+import android.net.wifi.WifiManager
+import android.util.Log
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.engine.android.Android
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.logging.LogLevel
+import io.ktor.client.plugins.logging.Logger
+import io.ktor.client.plugins.logging.Logging
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.contentType
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose // <-- YOUR FIX: Import awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow // <-- YOUR FIX: Import callbackFlow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import java.net.InetAddress
+import javax.jmdns.JmDNS
+import javax.jmdns.ServiceEvent
+import javax.jmdns.ServiceListener
+
+@Serializable
+data class JarvisCommandRequest(val command: String, val token: String)
+
+@Serializable
+data class JarvisCommandResponse(val ok: Boolean, val request_id: String)
+
+class JarvisApiClient(private val context: Context) {
+
+    private val client = HttpClient(Android) {
+        expectSuccess = true
+        install(ContentNegotiation) {
+            json()
+        }
+        // This Ktor logging now works because we added the library
+        install(Logging) {
+            level = LogLevel.ALL
+            logger = object : Logger {
+                override fun log(message: String) {
+                    Log.d("KtorClient", message)
+                }
+            }
+        }
+    }
+
+    private val apiToken = "jarvisrunning"
+
+    // This function now correctly uses callbackFlow, as you suggested
+    fun discoverJarvisService(): Flow<String> = callbackFlow {
+        val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val lock = wifiManager.createMulticastLock("JarvisAppLock")
+        var jmdns: JmDNS? = null
+        var serviceListener: ServiceListener? = null
+
+        try {
+            lock.setReferenceCounted(true)
+            lock.acquire()
+
+            val hostAddress = getLocalIpAddress(wifiManager)
+            if (hostAddress == null) {
+                Log.e("JarvisApiClient", "Could not get local IP address.")
+                close(IllegalStateException("Could not get local IP address."))
+                return@callbackFlow
+            }
+
+            Log.d("JarvisApiClient", "Starting jmDNS on $hostAddress")
+            val inetAddress = InetAddress.getByName(hostAddress)
+            jmdns = JmDNS.create(inetAddress, "JarvisClient")
+
+            serviceListener = object : ServiceListener {
+                override fun serviceAdded(event: ServiceEvent) {
+                    Log.d("JarvisApiClient", "Service added: ${event.name}")
+                    jmdns?.requestServiceInfo(event.type, event.name, 1)
+                }
+
+                override fun serviceRemoved(event: ServiceEvent) {
+                    Log.d("JarvisApiClient", "Service removed: ${event.name}")
+                }
+
+                override fun serviceResolved(event: ServiceEvent) {
+                    Log.d("JarvisApiClient", "Service resolved: ${event.info.name}")
+                    val info = event.info
+                    val port = info.port
+                    val host = info.inetAddresses.firstOrNull()?.hostAddress
+                    if (host != null && port != 0) {
+                        val url = "http://$host:$port"
+                        Log.d("JarvisApiClient", "Jarvis found at: $url")
+                        trySend(url) // <-- YOUR FIX: Use trySend
+                    }
+                }
+            }
+
+            jmdns.addServiceListener("_jarvis._tcp.local.", serviceListener)
+            Log.d("JarvisApiClient", "Listening for _jarvis._tcp.local.")
+
+        } catch (e: Exception) {
+            Log.e("JarvisApiClient", "Error during mDNS discovery: ${e.message}", e)
+            close(e) // Close the flow with the exception
+        }
+
+        // YOUR FIX: This block is executed when the flow is cancelled
+        awaitClose {
+            Log.d("JarvisApiClient", "Closing mDNS discovery.")
+            if (jmdns != null && serviceListener != null) {
+                jmdns.removeServiceListener("_jarvis._tcp.local.", serviceListener)
+            }
+            jmdns?.close()
+            if (lock.isHeld) {
+                lock.release()
+            }
+        }
+    }.flowOn(Dispatchers.IO) // flowOn is still correct to use here
+
+    @Suppress("DEPRECATION")
+    private fun getLocalIpAddress(wifiManager: WifiManager): String? {
+        val ipInt = wifiManager.dhcpInfo.ipAddress
+        if (ipInt == 0) return null
+        return String.format(
+            java.util.Locale.US, // Use US locale to avoid formatting issues
+            "%d.%d.%d.%d",
+            ipInt and 0xFF,
+            ipInt shr 8 and 0xFF,
+            ipInt shr 16 and 0xFF,
+            ipInt shr 24 and 0xFF
+        )
+    }
+
+    suspend fun sendCommand(serverUrl: String, command: String): Result<JarvisCommandResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val requestBody = JarvisCommandRequest(command = command, token = apiToken)
+                val response: JarvisCommandResponse = client.post("$serverUrl/command") {
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody)
+                }.body()
+                Result.success(response)
+            } catch (e: Exception) {
+                Log.e("JarvisApiClient", "Failed to send command: ${e.message}", e)
+                Result.failure(e)
+            }
+        }
+    }
+}

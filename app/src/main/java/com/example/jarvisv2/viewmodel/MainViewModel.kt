@@ -7,6 +7,9 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.example.jarvisv2.data.AppDatabase
+import com.example.jarvisv2.data.ChatMessage
+import com.example.jarvisv2.data.ChatRepository
 import com.example.jarvisv2.data.allCommands
 import com.example.jarvisv2.network.JarvisApiClient
 import com.example.jarvisv2.network.JarvisCommandResponse
@@ -33,6 +36,7 @@ class MainViewModel(
 ) : AndroidViewModel(app) {
 
     private val apiClient = JarvisApiClient(app.applicationContext)
+    private val repository: ChatRepository
 
     // -----------------------------------------------------------------------------------------
     // INTERNAL STATES
@@ -43,10 +47,10 @@ class MainViewModel(
     private val _lastCommandStatus = MutableStateFlow<CommandStatus>(CommandStatus.Idle)
     private val _commandText = MutableStateFlow("")
 
-    val chatHistory: StateFlow<List<ChatMessage>> =
-        savedStateHandle.getStateFlow("chatHistory", emptyList())
+    // Chat History now comes directly from the Database via the Repository
+    val chatHistory: StateFlow<List<ChatMessage>>
 
-    // --- FIX 2: Persist lastEventId in the SavedStateHandle ---
+    // We still use SavedStateHandle to persist the lastEventId across process death
     private val lastEventId: StateFlow<Int> =
         savedStateHandle.getStateFlow("lastEventId", 0)
 
@@ -65,14 +69,14 @@ class MainViewModel(
     val isVoiceServiceRunning: StateFlow<ServiceState> =
         JarvisVoiceService.serviceState.stateIn(
             viewModelScope,
-            SharingStarted.Eagerly, // <-- THIS IS THE FIX
+            SharingStarted.Eagerly,
             ServiceState.Stopped
         )
 
     val detailedVoiceState: StateFlow<VoiceListener.VoiceState> =
         JarvisVoiceService.detailedVoiceState.stateIn(
             viewModelScope,
-            SharingStarted.Eagerly, // <-- THIS IS THE FIX
+            SharingStarted.Eagerly,
             VoiceListener.VoiceState.Stopped
         )
 
@@ -88,6 +92,14 @@ class MainViewModel(
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     init {
+        // Initialize the Database and Repository
+        val chatDao = AppDatabase.getDatabase(app).chatDao()
+        repository = ChatRepository(chatDao)
+
+        // Initialize the chatHistory Flow from the database
+        chatHistory = repository.allMessages
+            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
         startServerDiscovery()
         observeVoiceServiceCommands()
         startEventPolling()
@@ -99,33 +111,20 @@ class MainViewModel(
             apiClient.discoverJarvisService().collect { url ->
                 _serverUrl.value = url
                 _isDiscovering.value = false
-
-                // --- FIX 1: This block is removed ---
-                // This was the source of the race condition that wiped your chat history.
-                // The connection icon in the top bar is enough feedback.
-                /*
-                if (chatHistory.value.none { it.message.startsWith("Jarvis server found") }) {
-                    addChatMessage("Jarvis server found at $url", ChatSender.System)
-                }
-                */
             }
         }
     }
 
     private fun observeVoiceServiceCommands() {
-        // Use a more robust flow chain
         JarvisVoiceService.latestVoiceResult
-            .filter { it.isNotEmpty() } // 1. Only let non-empty commands pass
+            .filter { it.isNotEmpty() }
             .onEach { command ->
-                // 2. This code now only runs for valid commands
                 Log.d("ViewModel", "Processing voice command: $command")
                 addChatMessage(command, ChatSender.User)
                 sendCommand(command)
-
-                // 3. Clear the command *after* processing
                 JarvisVoiceService.latestVoiceResult.value = ""
             }
-            .launchIn(viewModelScope) // Launch this collector in the ViewModel's scope
+            .launchIn(viewModelScope)
     }
 
     private fun startEventPolling() {
@@ -133,25 +132,20 @@ class MainViewModel(
             serverUrl.collect { url ->
                 if (url != null) {
                     while (true) {
-                        // --- FIX 2: Use the persisted lastEventId.value ---
                         val result: Result<JarvisEventResponse> = apiClient.getEvents(url, lastEventId.value)
                         result.fold(
                             onSuccess = { response ->
                                 val lastButtonCmd = _lastButtonCommand.value
                                 for (event in response.events) {
                                     if (event.type == "speak") {
-                                        // Check if this "speak" event matches the last button command
                                         if (lastButtonCmd != null && event.text.equals(lastButtonCmd, ignoreCase = true)) {
-                                            // It matches, so "swallow" it and don't add to chat
-                                            _lastButtonCommand.value = null // Clear the command
+                                            _lastButtonCommand.value = null
                                             Log.d("ViewModel", "Swallowed button response: ${event.text}")
                                         } else {
-                                            // Not a button response, so add it to the chat
                                             addChatMessage(event.text, ChatSender.System)
                                         }
                                     }
                                 }
-                                // --- FIX 2: Save the new lastEventId to the SavedStateHandle ---
                                 savedStateHandle["lastEventId"] = response.last_id
                             },
                             onFailure = { delay(5000) }
@@ -173,18 +167,11 @@ class MainViewModel(
 
         val commandToSend = if (command.startsWith("/")) command.substring(1) else command
 
-        // 1. Add user's typed message to chat
         addChatMessage(commandToSend, ChatSender.User)
-        // 2. Send command to server
         sendCommand(commandToSend)
-        // 3. Clear text box
         _commandText.value = ""
     }
 
-    /**
-     * Sends a command that originated from chat or voice.
-     * The server's response WILL be added to the chat.
-     */
     private fun sendCommand(command: String) {
         val url = _serverUrl.value
         if (url == null) {
@@ -207,18 +194,10 @@ class MainViewModel(
         }
     }
 
-    /**
-     * Sends a command from a button.
-     * The server's response will be "swallowed" and NOT added to the chat.
-     */
     fun sendButtonCommand(command: String) {
-        // Set the command to be "swallowed"
         _lastButtonCommand.value = command
-
-        // Send the command normally
         sendCommand(command)
     }
-
 
     fun toggleVoiceService() {
         val intent = Intent(app.applicationContext, JarvisVoiceService::class.java)
@@ -229,10 +208,12 @@ class MainViewModel(
         }
     }
 
+    // Updated to save to the database instead of memory
     private fun addChatMessage(message: String, sender: ChatSender) {
-        val chat = ChatMessage(message = message, sender = sender)
-        val currentHistory = chatHistory.value
-        savedStateHandle["chatHistory"] = currentHistory + chat
+        viewModelScope.launch {
+            val chat = ChatMessage(message = message, sender = sender)
+            repository.insert(chat)
+        }
     }
 }
 
@@ -251,10 +232,3 @@ sealed class CommandStatus {
 enum class ChatSender : Parcelable {
     User, System
 }
-
-@Parcelize
-data class ChatMessage(
-    val message: String,
-    val sender: ChatSender,
-    val timestamp: Long = System.currentTimeMillis()
-) : Parcelable

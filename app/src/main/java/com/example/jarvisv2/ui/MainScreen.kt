@@ -41,7 +41,8 @@ import com.example.jarvisv2.ui.theme.DarkOnSurface
 import com.example.jarvisv2.ui.theme.DarkPrimary
 import com.example.jarvisv2.ui.theme.DarkSurface
 import com.example.jarvisv2.ui.theme.SystemMessage
-import com.example.jarvisv2.viewmodel.ChatMessage
+// --- UPDATED IMPORTS ---
+import com.example.jarvisv2.data.ChatMessage
 import com.example.jarvisv2.viewmodel.ChatSender
 import com.example.jarvisv2.viewmodel.MainViewModel
 
@@ -76,7 +77,6 @@ fun MainScreen(
                     titleContentColor = DarkOnSurface
                 ),
                 actions = {
-                    // Use the detailed VoiceStatusIcon
                     VoiceStatusIcon(
                         detailedStateFlow = viewModel.detailedVoiceState,
                         onToggle = onToggleVoiceService
@@ -122,8 +122,6 @@ fun MainScreen(
                         command = command.description,
                         icon = command.icon
                     ) {
-                        // --- THIS IS THE FIX ---
-                        // Use the silent 'sendButtonCommand'
                         viewModel.sendButtonCommand(command.command)
                     }
                 }
@@ -171,9 +169,6 @@ fun ConnectionStatusIcon(serverUrl: String?, isDiscovering: Boolean) {
     }
 }
 
-// This composable is in MainScreen.kt, but we already have an
-// identical one in UiComponents.kt (VoiceStatusIcon).
-// We'll keep this one as it's scoped to the (now unused) MainScreen.
 @Composable
 fun VoiceServiceToggleButton(isRunning: Boolean, onClick: () -> Unit) {
     IconButton(onClick = onClick) {

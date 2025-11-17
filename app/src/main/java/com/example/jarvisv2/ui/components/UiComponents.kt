@@ -15,13 +15,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send // <-- IMPORT ADDED
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -44,7 +43,8 @@ import com.example.jarvisv2.ui.theme.DarkOnPrimary
 import com.example.jarvisv2.ui.theme.DarkOnSurface
 import com.example.jarvisv2.ui.theme.DarkPrimary
 import com.example.jarvisv2.ui.theme.DarkSurface
-import com.example.jarvisv2.viewmodel.ChatMessage
+// --- UPDATED IMPORTS ---
+import com.example.jarvisv2.data.ChatMessage
 import com.example.jarvisv2.viewmodel.ChatSender
 import kotlinx.coroutines.flow.StateFlow
 
@@ -98,15 +98,13 @@ fun VoiceStatusIcon(
         Crossfade(targetState = state, label = "VoiceStatus") { currentState ->
             when (currentState) {
                 is VoiceListener.VoiceState.Listening -> {
-                    // It's actively listening for speech
                     Icon(
                         imageVector = Icons.Default.Mic,
                         contentDescription = "Listening...",
-                        tint = DarkPrimary // Active color
+                        tint = DarkPrimary
                     )
                 }
                 is VoiceListener.VoiceState.Processing -> {
-                    // It's thinking about what you said
                     CircularProgressIndicator(
                         modifier = Modifier.size(24.dp),
                         strokeWidth = 2.dp,
@@ -114,19 +112,17 @@ fun VoiceStatusIcon(
                     )
                 }
                 is VoiceListener.VoiceState.Error -> {
-                    // An error occurred
                     Icon(
                         imageVector = Icons.Default.MicOff,
                         contentDescription = "Voice error",
-                        tint = DarkError // Error color
+                        tint = DarkError
                     )
                 }
                 is VoiceListener.VoiceState.Stopped, is VoiceListener.VoiceState.Result -> {
-                    // It's off or waiting for the next command
                     Icon(
                         imageVector = Icons.Default.MicOff,
                         contentDescription = "Start service",
-                        tint = Color.Gray // Inactive color
+                        tint = Color.Gray
                     )
                 }
             }
@@ -165,9 +161,7 @@ fun ChatBubble(chat: ChatMessage) {
                 .background(bubbleColor)
                 .combinedClickable(
                     onClick = {
-                        // Copy text to clipboard
                         clipboardManager.setText(AnnotatedString(chat.message))
-                        // Show feedback
                         Toast
                             .makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT)
                             .show()
@@ -199,7 +193,6 @@ fun CommandInputBar(
             .padding(8.dp)
     ) {
 
-        // SUGGESTIONS
         if (suggestions.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier
@@ -215,7 +208,6 @@ fun CommandInputBar(
             }
         }
 
-        // INPUT FIELD
         OutlinedTextField(
             value = text,
             onValueChange = onTextChanged,
@@ -227,7 +219,6 @@ fun CommandInputBar(
                     focusManager.clearFocus()
                 }) {
                     Icon(
-                        // --- THIS IS THE FIX ---
                         imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send",
                         tint = DarkPrimary

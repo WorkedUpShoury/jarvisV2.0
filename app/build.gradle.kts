@@ -2,7 +2,9 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.23"
-    id("kotlin-parcelize") // <-- ADDED FOR PERSISTENT CHAT
+    id("kotlin-parcelize")
+    // 1. Add KSP Plugin for Room
+    id("com.google.devtools.ksp") version "1.9.23-1.0.19"
 }
 
 android {
@@ -28,7 +30,6 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-
                 "proguard-rules.pro"
             )
         }
@@ -42,13 +43,10 @@ android {
     }
     buildFeatures {
         compose = true
-
     }
-
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.11"
     }
-    // The version is now controlled by the BOM in dependencies.
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -63,10 +61,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.multidex:multidex:2.0.1")
-    // This BOM (Bill of Materials) automatically selects the
-    // correct Compose Compiler for our Kotlin version.
     implementation(platform(libs.androidx.compose.bom))
-
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
@@ -90,11 +85,16 @@ dependencies {
     // Icons
     implementation(libs.androidx.material.icons.extended)
 
+    // Room Database
+    val room_version = "2.6.1"
+    implementation("androidx.room:room-runtime:$room_version")
+    implementation("androidx.room:room-ktx:$room_version")
+    ksp("androidx.room:room-compiler:$room_version")
+
     // Test
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)

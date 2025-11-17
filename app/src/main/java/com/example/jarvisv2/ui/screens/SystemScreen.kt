@@ -1,76 +1,48 @@
 package com.example.jarvisv2.ui.screens
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.BrightnessMedium
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Minimize
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.VolumeUp
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.jarvisv2.ui.theme.DarkOnSurface
 import com.example.jarvisv2.ui.theme.DarkPrimary
-// --- IMPORT THE COLOR HERE ---
 import com.example.jarvisv2.ui.theme.DarkSurface
 import com.example.jarvisv2.viewmodel.MainViewModel
 import kotlin.math.roundToInt
 
-// List 1: For the new horizontal row card
+// 1. Maintenance Actions (Now on Main Screen)
+private val maintenanceActions = listOf(
+    Action("Refresh", Icons.Default.Refresh, "refresh"),
+    Action("Sleep Jarvis", Icons.Default.BedtimeOff, "go to sleep"),
+    Action("Gestures", Icons.Default.BackHand, "enable gestures"),
+    Action("Diagnostics", Icons.Default.MonitorHeart, "status")
+)
+
+// 2. Window Actions
 private val windowRowActions = listOf(
     Action("Minimize", Icons.Default.Minimize, "minimize window"),
     Action("Fullscreen", Icons.Default.Fullscreen, "fullscreen"),
     Action("Close", Icons.Default.Close, "close window")
 )
 
-// List 2: For the existing vertical grid
+// 3. System Power Actions
 private val systemGridActions = listOf(
     Action("Lock", Icons.Default.Lock, "lock screen"),
     Action("Shutdown", Icons.Default.PowerSettingsNew, "shutdown"),
     Action("Restart", Icons.Default.RestartAlt, "restart"),
-    Action("Sleep", Icons.Default.Bedtime, "sleep system"),
+    Action("Sleep PC", Icons.Default.Bedtime, "sleep system"),
 )
 
 @Composable
@@ -78,11 +50,29 @@ fun SystemScreen(viewModel: MainViewModel) {
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        MediaSearchInput(viewModel = viewModel)
+        // --- Maintenance Section (Top) ---
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.heightIn(max = 200.dp)
+        ) {
+            items(maintenanceActions) { action ->
+                ActionButton(
+                    modifier = Modifier.height(75.dp), // Compact height
+                    icon = action.icon,
+                    text = action.name,
+                    viewModel = viewModel,
+                    command = action.command
+                )
+            }
+        }
 
-        // --- THIS CARD IS NOW FIXED ---
+        // --- Window Actions ---
         WindowActionsCard(viewModel = viewModel)
 
+        // --- Sliders & Power Actions ---
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 110.dp),
             contentPadding = PaddingValues(16.dp),
@@ -113,10 +103,8 @@ private fun WindowActionsCard(viewModel: MainViewModel) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         elevation = CardDefaults.cardElevation(4.dp),
-        // --- THIS IS THE FIX ---
-        // Set the container color to DarkSurface to match the ActionButton
         colors = CardDefaults.cardColors(containerColor = DarkSurface)
     ) {
         Row(
@@ -152,92 +140,6 @@ private fun WindowActionsCard(viewModel: MainViewModel) {
         }
     }
 }
-
-
-@Composable
-fun MediaSearchInput(viewModel: MainViewModel) {
-    var text by remember { mutableStateOf("") }
-    var selectedSource by remember { mutableStateOf("spotify") }
-    val focusManager = LocalFocusManager.current
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Spotify Button
-            OutlinedButton(
-                onClick = { selectedSource = "spotify" },
-                modifier = Modifier.weight(1f),
-                colors = if (selectedSource == "spotify") {
-                    ButtonDefaults.outlinedButtonColors(containerColor = DarkPrimary.copy(alpha = 0.3f))
-                } else {
-                    ButtonDefaults.outlinedButtonColors()
-                }
-            ) {
-                Text("Spotify")
-            }
-
-            // YouTube Button
-            OutlinedButton(
-                onClick = { selectedSource = "youtube" },
-                modifier = Modifier.weight(1f),
-                colors = if (selectedSource == "youtube") {
-                    ButtonDefaults.outlinedButtonColors(containerColor = DarkPrimary.copy(alpha = 0.3f))
-                } else {
-                    ButtonDefaults.outlinedButtonColors()
-                }
-            ) {
-                Text("YouTube")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedTextField(
-            value = text,
-            onValueChange = { text = it },
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Enter song name...") },
-            trailingIcon = {
-                IconButton(onClick = {
-                    val query = text.trim()
-                    if (query.isNotEmpty()) {
-                        val command = if (selectedSource == "spotify") {
-                            "play $query on spotify"
-                        } else {
-                            "play $query" // This is the command for YouTube
-                        }
-
-                        viewModel.sendButtonCommand(command)
-                        text = "" // Clear text
-                        focusManager.clearFocus() // Hide keyboard
-                    }
-                }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send",
-                        tint = DarkPrimary
-                    )
-                }
-            },
-            shape = RoundedCornerShape(22.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.Black,
-                unfocusedContainerColor = Color.Black,
-                focusedBorderColor = DarkPrimary,
-                unfocusedBorderColor = Color.Gray,
-                cursorColor = DarkPrimary
-            ),
-            singleLine = true
-        )
-    }
-}
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -7,15 +7,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +30,7 @@ import com.example.jarvisv2.ui.components.ConnectionStatusIcon
 import com.example.jarvisv2.ui.components.VoiceStatusIcon
 import com.example.jarvisv2.ui.screens.AppsScreen
 import com.example.jarvisv2.ui.screens.ChatScreen
+import com.example.jarvisv2.ui.screens.MediaScreen
 import com.example.jarvisv2.ui.screens.SystemScreen
 import com.example.jarvisv2.ui.screens.WebScreen
 import com.example.jarvisv2.ui.theme.DarkPrimary
@@ -43,8 +44,10 @@ fun AppRoot(
     onToggleVoiceService: () -> Unit
 ) {
     val navController = rememberNavController()
+
     val items = listOf(
         BottomNavItem.System,
+        BottomNavItem.Media,
         BottomNavItem.Apps,
         BottomNavItem.Web,
         BottomNavItem.Chat
@@ -76,7 +79,7 @@ fun AppRoot(
             )
         },
         floatingActionButton = {
-            // Hide all FABs on the Chat screen
+            // Only show FAB on non-Chat screens
             AnimatedVisibility(
                 visible = currentRoute != BottomNavItem.Chat.route,
                 enter = fadeIn() + slideInVertically { it / 2 },
@@ -87,12 +90,23 @@ fun AppRoot(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
 
-                    // Expanding sub-buttons
                     AnimatedVisibility(visible = isFabExpanded) {
                         Column(
                             horizontalAlignment = Alignment.End,
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
+                            // 1. Play Button
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    viewModel.sendButtonCommand("resume playback")
+                                    isFabExpanded = false
+                                },
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Icon(Icons.Default.PlayArrow, "Play")
+                            }
+
+                            // 2. Next Button
                             SmallFloatingActionButton(
                                 onClick = {
                                     viewModel.sendButtonCommand("next track")
@@ -100,41 +114,50 @@ fun AppRoot(
                                 },
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant
                             ) {
-                                Icon(Icons.Default.SkipNext, "Next Track")
+                                Icon(Icons.Default.SkipNext, "Next")
                             }
 
+                            // 3. Mute Button
                             SmallFloatingActionButton(
                                 onClick = {
-                                    viewModel.sendButtonCommand("previous track")
+                                    viewModel.sendButtonCommand("mute volume")
                                     isFabExpanded = false
                                 },
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant
                             ) {
-                                Icon(Icons.Default.SkipPrevious, "Previous Track")
+                                Icon(Icons.Default.VolumeOff, "Mute")
                             }
 
+                            // 4. Music Button (Navigates to Media Screen)
                             SmallFloatingActionButton(
                                 onClick = {
-                                    viewModel.sendButtonCommand("pause playback")
+                                    navController.navigate(BottomNavItem.Media.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
                                     isFabExpanded = false
                                 },
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant
                             ) {
-                                Icon(Icons.Default.Pause, "Pause Playback")
+                                Icon(Icons.Default.MusicNote, "Music")
                             }
                         }
                     }
 
-                    // Main FAB
+                    // Main FAB Button
                     FloatingActionButton(
                         onClick = { isFabExpanded = !isFabExpanded },
                         containerColor = DarkPrimary
                     ) {
                         Crossfade(targetState = isFabExpanded, label = "FabIcon") {
                             if (it) {
-                                Icon(Icons.Default.Close, contentDescription = "Close Media")
+                                Icon(Icons.Default.Close, contentDescription = "Close")
                             } else {
-                                Icon(Icons.Default.PlayArrow, contentDescription = "Play Media")
+                                // --- CHANGED TO MEDIA ICON ---
+                                Icon(Icons.Default.MusicNote, contentDescription = "Media Menu")
                             }
                         }
                     }
@@ -170,6 +193,9 @@ fun AppRoot(
         ) {
             composable(BottomNavItem.System.route) {
                 SystemScreen(viewModel)
+            }
+            composable(BottomNavItem.Media.route) {
+                MediaScreen(viewModel)
             }
             composable(BottomNavItem.Apps.route) {
                 AppsScreen(viewModel)

@@ -7,6 +7,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -18,11 +19,12 @@ import com.example.jarvisv2.viewmodel.MainViewModel
 @Composable
 fun ActionButton(
     modifier: Modifier = Modifier,
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    iconDrawable: Int? = null,
     text: String,
     subtitle: String? = null,
-    containerColor: Color = DarkSurface, // Default to dark navy
-    elevation: Dp = 8.dp, // Default to standard elevation
+    containerColor: Color = DarkSurface,
+    elevation: Dp = 8.dp,
     onClick: () -> Unit
 ) {
     ElevatedCard(
@@ -45,24 +47,33 @@ fun ActionButton(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-            // ICON
-            Icon(
-                imageVector = icon,
-                contentDescription = text,
-                tint = DarkPrimary,
-                modifier = Modifier.size(34.dp)
-            )
+            // --- ICON LOGIC ---
+            if (iconDrawable != null) {
+                // 1. Priority: Custom Drawable (Official Brand Icon)
+                Icon(
+                    painter = painterResource(id = iconDrawable),
+                    contentDescription = text,
+                    tint = Color.Unspecified, // Keeps original colors (if any)
+                    modifier = Modifier.size(34.dp)
+                )
+            } else if (icon != null) {
+                // 2. Fallback: Standard Vector Icon
+                Icon(
+                    imageVector = icon,
+                    contentDescription = text,
+                    tint = DarkPrimary,
+                    modifier = Modifier.size(34.dp)
+                )
+            }
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // MAIN LABEL
             Text(
                 text = text,
                 color = DarkOnSurface,
                 fontSize = 13.sp
             )
 
-            // OPTIONAL SUBTITLE
             if (!subtitle.isNullOrEmpty()) {
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
@@ -75,13 +86,11 @@ fun ActionButton(
     }
 }
 
-/**
- * Overload for ViewModel usage
- */
 @Composable
 fun ActionButton(
     modifier: Modifier = Modifier,
-    icon: ImageVector,
+    icon: ImageVector? = null,
+    iconDrawable: Int? = null,
     text: String,
     subtitle: String? = null,
     containerColor: Color = DarkSurface,
@@ -92,6 +101,7 @@ fun ActionButton(
     ActionButton(
         modifier = modifier,
         icon = icon,
+        iconDrawable = iconDrawable,
         text = text,
         subtitle = subtitle,
         containerColor = containerColor,

@@ -30,7 +30,7 @@ import com.example.jarvisv2.ui.components.ConnectionStatusIcon
 import com.example.jarvisv2.ui.components.VoiceStatusIcon
 import com.example.jarvisv2.ui.screens.AppsScreen
 import com.example.jarvisv2.ui.screens.ChatScreen
-import com.example.jarvisv2.ui.screens.GameScreen
+// REMOVED: import com.example.jarvisv2.ui.screens.GameScreen <-- This line was causing an error
 import com.example.jarvisv2.ui.screens.MediaScreen
 import com.example.jarvisv2.ui.screens.SystemScreen
 import com.example.jarvisv2.ui.screens.WebScreen
@@ -46,7 +46,6 @@ fun AppRoot(
 ) {
     val navController = rememberNavController()
 
-    // Game screen is intentionally excluded from the bottom bar
     val items = listOf(
         BottomNavItem.System,
         BottomNavItem.Media,
@@ -61,29 +60,28 @@ fun AppRoot(
 
     Scaffold(
         topBar = {
-            if (currentRoute != BottomNavItem.Game.route) {
-                TopAppBar(
-                    title = { Text("Jarvis V2 Control") },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = DarkSurface
-                    ),
-                    navigationIcon = {
-                        ConnectionStatusIcon(
-                            serverUrlFlow = viewModel.serverUrl,
-                            isDiscoveringFlow = viewModel.isDiscovering
-                        )
-                    },
-                    actions = {
-                        VoiceStatusIcon(
-                            detailedStateFlow = viewModel.detailedVoiceState,
-                            onToggle = onToggleVoiceService
-                        )
-                    }
-                )
-            }
+            // REMOVED: Check for Game route is no longer needed
+            TopAppBar(
+                title = { Text("Jarvis V2 Control") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = DarkSurface
+                ),
+                navigationIcon = {
+                    ConnectionStatusIcon(
+                        serverUrlFlow = viewModel.serverUrl,
+                        isDiscoveringFlow = viewModel.isDiscovering
+                    )
+                },
+                actions = {
+                    VoiceStatusIcon(
+                        detailedStateFlow = viewModel.detailedVoiceState,
+                        onToggle = onToggleVoiceService
+                    )
+                }
+            )
         },
         floatingActionButton = {
-            val hideFab = currentRoute == BottomNavItem.Chat.route || currentRoute == BottomNavItem.Game.route
+            val hideFab = currentRoute == BottomNavItem.Chat.route
 
             AnimatedVisibility(
                 visible = !hideFab,
@@ -164,24 +162,23 @@ fun AppRoot(
             }
         },
         bottomBar = {
-            if (currentRoute != BottomNavItem.Game.route) {
-                NavigationBar(containerColor = DarkSurface) {
-                    items.forEach { item ->
-                        NavigationBarItem(
-                            selected = currentRoute == item.route,
-                            onClick = {
-                                navController.navigate(item.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    restoreState = true
-                                    launchSingleTop = true
+            // REMOVED: Check for Game route
+            NavigationBar(containerColor = DarkSurface) {
+                items.forEach { item ->
+                    NavigationBarItem(
+                        selected = currentRoute == item.route,
+                        onClick = {
+                            navController.navigate(item.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
                                 }
-                            },
-                            icon = { Icon(item.icon, item.label) },
-                            label = { Text(item.label) }
-                        )
-                    }
+                                restoreState = true
+                                launchSingleTop = true
+                            }
+                        },
+                        icon = { Icon(item.icon, item.label) },
+                        label = { Text(item.label) }
+                    )
                 }
             }
         }
@@ -196,22 +193,14 @@ fun AppRoot(
                 SystemScreen(viewModel = viewModel)
             }
             composable(BottomNavItem.Media.route) {
-                MediaScreen(
-                    viewModel = viewModel,
-                    onGameModeClick = {
-                        navController.navigate(BottomNavItem.Game.route) {
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    }
-                )
+                // UPDATED: Removed the `onGameModeClick` parameter
+                MediaScreen(viewModel = viewModel)
             }
             composable(BottomNavItem.Apps.route) {
                 AppsScreen(viewModel)
             }
-            composable(BottomNavItem.Game.route) {
-                GameScreen(viewModel)
-            }
+            // REMOVED: composable(BottomNavItem.Game.route) { ... }
+
             composable(BottomNavItem.Web.route) {
                 WebScreen(viewModel)
             }

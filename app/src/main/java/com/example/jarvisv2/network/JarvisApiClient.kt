@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
+import java.net.DatagramPacket
+import java.net.DatagramSocket
 import java.net.InetAddress
 import javax.jmdns.JmDNS
 import javax.jmdns.ServiceEvent
@@ -66,6 +68,26 @@ class JarvisApiClient(private val context: Context) {
     }
 
     private val apiToken = "jarvisrunning"
+    private val udpPort = 8766
+
+    // -------------------------------------------------------------------------
+    // NEW UDP FUNCTION
+    // -------------------------------------------------------------------------
+    suspend fun sendUdpCommand(host: String, message: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                // Standard Java socket is fastest for this fire-and-forget usage
+                val socket = DatagramSocket()
+                val address = InetAddress.getByName(host)
+                val buffer = message.toByteArray()
+                val packet = DatagramPacket(buffer, buffer.size, address, udpPort)
+                socket.send(packet)
+                socket.close()
+            } catch (e: Exception) {
+                Log.e("JarvisUDP", "Send failed: ${e.message}")
+            }
+        }
+    }
 
     fun discoverJarvisService(): Flow<String> = callbackFlow {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager

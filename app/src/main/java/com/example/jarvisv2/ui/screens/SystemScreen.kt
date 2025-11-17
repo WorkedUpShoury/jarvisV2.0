@@ -26,20 +26,22 @@ import kotlin.math.roundToInt
 // 1. Maintenance Actions
 private val maintenanceActions = listOf(
     Action("Refresh", Icons.Default.Refresh, "refresh"),
-    Action("Sleep", Icons.Default.BedtimeOff, "go to sleep"), // <--- Renamed to "Sleep" for better alignment
+    Action("Sleep", Icons.Default.BedtimeOff, "go to sleep"),
     Action("Gestures", Icons.Default.BackHand, "enable gestures"),
     Action("Diagnostics", Icons.Default.MonitorHeart, "status")
 )
 
-// 2. Window Actions
+// 2. Window Actions (Top Row)
 private val windowRowActions = listOf(
     Action("Minimize", Icons.Default.Minimize, "minimize window"),
     Action("Fullscreen", Icons.Default.Fullscreen, "fullscreen"),
     Action("Close", Icons.Default.Close, "close window")
 )
 
-// 3. System Power Actions
+// 3. System & Navigation Actions (Main Grid)
 private val systemGridActions = listOf(
+    Action("Switch Tab", Icons.Default.SwapHoriz, "alt tab"), // <-- Added
+    Action("Next Tab", Icons.Default.DynamicFeed, "ctrl tab"), // <-- Added
     Action("Lock", Icons.Default.Lock, "lock screen"),
     Action("Shutdown", Icons.Default.PowerSettingsNew, "shutdown"),
     Action("Restart", Icons.Default.RestartAlt, "restart"),
@@ -53,33 +55,31 @@ fun SystemScreen(viewModel: MainViewModel) {
     ) {
         // --- Maintenance Section (Top) ---
         LazyVerticalGrid(
-            columns = GridCells.Fixed(4), // 4 items in one row
+            columns = GridCells.Fixed(4),
             contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 0.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.height(100.dp) // Fixed height for single row
+            modifier = Modifier.height(100.dp)
         ) {
             items(maintenanceActions) { action ->
                 ActionButton(
                     modifier = Modifier.fillMaxHeight(),
-                    icon = action.icon,
+                    icon = action.icon!!, // Safe assert as these use vector icons
                     text = action.name,
                     viewModel = viewModel,
                     command = action.command,
-                    // --- TRANSPARENCY RESTORED ---
                     containerColor = Color.Transparent,
                     elevation = 0.dp
                 )
             }
         }
 
-        // --- ADDED SPACING ---
         Spacer(modifier = Modifier.height(24.dp))
 
         // --- Window Actions ---
         WindowActionsCard(viewModel = viewModel)
 
-        // --- Sliders & Power Actions ---
+        // --- Sliders & Power/Nav Actions ---
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 110.dp),
             contentPadding = PaddingValues(16.dp),
@@ -131,7 +131,7 @@ private fun WindowActionsCard(viewModel: MainViewModel) {
                     verticalArrangement = Arrangement.Center
                 ) {
                     Icon(
-                        imageVector = action.icon,
+                        imageVector = action.icon!!,
                         contentDescription = action.name,
                         tint = DarkPrimary,
                         modifier = Modifier.size(28.dp)

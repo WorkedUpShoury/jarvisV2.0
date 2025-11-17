@@ -13,11 +13,11 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Mouse
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,9 +41,19 @@ import com.example.jarvisv2.viewmodel.MainViewModel
 
 @Composable
 fun MediaScreen(
-    viewModel: MainViewModel,
-    onGameModeClick: () -> Unit // <--- NEW: Callback for Game Mode
+    viewModel: MainViewModel
 ) {
+    // State to control the popup visibility
+    var showTrackpad by remember { mutableStateOf(false) }
+
+    // Show the Dialog when state is true
+    if (showTrackpad) {
+        TrackpadDialog(
+            viewModel = viewModel,
+            onDismiss = { showTrackpad = false }
+        )
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -57,13 +67,13 @@ fun MediaScreen(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // --- Added Game Mode Button Here ---
+            // --- Trackpad Button (Triggers Popup) ---
             item {
                 ActionButton(
-                    icon = Icons.Default.SportsEsports,
-                    text = "Game Mode",
-                    containerColor = DarkSurface, // Standard card color
-                    onClick = onGameModeClick
+                    icon = Icons.Default.Mouse,
+                    text = "Trackpad",
+                    containerColor = DarkSurface,
+                    onClick = { showTrackpad = true }
                 )
             }
 

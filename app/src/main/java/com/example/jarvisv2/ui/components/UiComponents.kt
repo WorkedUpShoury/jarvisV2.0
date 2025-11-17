@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -25,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,7 +45,6 @@ import com.example.jarvisv2.ui.theme.DarkOnPrimary
 import com.example.jarvisv2.ui.theme.DarkOnSurface
 import com.example.jarvisv2.ui.theme.DarkPrimary
 import com.example.jarvisv2.ui.theme.DarkSurface
-// --- UPDATED IMPORTS ---
 import com.example.jarvisv2.data.ChatMessage
 import com.example.jarvisv2.viewmodel.ChatSender
 import kotlinx.coroutines.flow.StateFlow
@@ -132,11 +133,14 @@ fun VoiceStatusIcon(
 
 
 // ============================================================================
-//  CHAT BUBBLE (Now with Copy on Click)
+//  CHAT BUBBLE (Copy on Click, Delete on Long Press)
 // ============================================================================
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ChatBubble(chat: ChatMessage) {
+fun ChatBubble(
+    chat: ChatMessage,
+    onDelete: () -> Unit = {}
+) {
     val isUser = chat.sender == ChatSender.User
 
     val bubbleColor =
@@ -147,6 +151,31 @@ fun ChatBubble(chat: ChatMessage) {
 
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    var showDeleteDialog by remember { mutableStateOf(false) }
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Delete Message?") },
+            text = { Text("This message will be removed from history.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete()
+                    showDeleteDialog = false
+                }) {
+                    Text("Delete", color = DarkError)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel", color = DarkOnSurface)
+                }
+            },
+            containerColor = DarkSurface,
+            titleContentColor = DarkOnSurface,
+            textContentColor = DarkOnSurface
+        )
+    }
 
     Box(
         modifier = Modifier.fillMaxWidth(),
@@ -165,6 +194,9 @@ fun ChatBubble(chat: ChatMessage) {
                         Toast
                             .makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT)
                             .show()
+                    },
+                    onLongClick = {
+                        showDeleteDialog = true
                     }
                 )
                 .padding(horizontal = 12.dp, vertical = 8.dp)

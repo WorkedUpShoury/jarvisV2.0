@@ -8,4 +8,12 @@ class ChatRepository(private val chatDao: ChatDao) {
     suspend fun insert(message: ChatMessage) {
         chatDao.insertMessage(message)
     }
+
+    suspend fun clearAll() {
+        chatDao.clearAllMessages()
+    }
+
+    suspend fun delete(message: ChatMessage) {
+        chatDao.deleteMessage(message)
+    }
 }

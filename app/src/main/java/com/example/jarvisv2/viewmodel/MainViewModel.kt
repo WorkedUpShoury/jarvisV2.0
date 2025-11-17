@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch // <-- Added Import
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -106,7 +106,6 @@ class MainViewModel(
             _isDiscovering.value = true
             apiClient.discoverJarvisService()
                 .catch { e ->
-                    // --- FIX: Catch exceptions (like Wifi off) to prevent crash ---
                     Log.e("MainViewModel", "Discovery failed: ${e.message}")
                     _isDiscovering.value = false
                 }
@@ -220,6 +219,19 @@ class MainViewModel(
         viewModelScope.launch {
             val chat = ChatMessage(message = message, sender = sender)
             repository.insert(chat)
+        }
+    }
+
+    // --- NEW: Clear & Delete functionality ---
+    fun clearChatHistory() {
+        viewModelScope.launch {
+            repository.clearAll()
+        }
+    }
+
+    fun deleteChatMessage(message: ChatMessage) {
+        viewModelScope.launch {
+            repository.delete(message)
         }
     }
 }

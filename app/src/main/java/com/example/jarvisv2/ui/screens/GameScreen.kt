@@ -31,7 +31,7 @@ fun TrackpadDialog(
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(500.dp), // Stays large enough for usage
+                .height(500.dp),
             shape = RoundedCornerShape(16.dp),
             color = DarkSurface
         ) {
@@ -45,7 +45,7 @@ fun TrackpadDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Trackpad",
+                        text = "Trackpad (UDP)",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp
@@ -69,8 +69,14 @@ fun TrackpadDialog(
                         // Clicks
                         .pointerInput(Unit) {
                             detectTapGestures(
-                                onTap = { viewModel.sendButtonCommand("mouse click left") },
-                                onLongPress = { viewModel.sendButtonCommand("mouse click right") }
+                                onTap = {
+                                    // UDP Protocol: clk|left
+                                    viewModel.sendUdpCommand("clk|left")
+                                },
+                                onLongPress = {
+                                    // UDP Protocol: clk|right
+                                    viewModel.sendUdpCommand("clk|right")
+                                }
                             )
                         }
                         // Movement
@@ -79,20 +85,21 @@ fun TrackpadDialog(
                                 change.consume()
 
                                 // --- SENSITIVITY CONTROL ---
-                                // 2.5f = Fast | 1.0f = Normal | 0.5f = Slow
-                                val sensitivity = 1.0f
+                                // Increased slightly for UDP responsiveness
+                                val sensitivity = 1.5f
 
                                 val dx = (dragAmount.x * sensitivity).roundToInt()
                                 val dy = (dragAmount.y * sensitivity).roundToInt()
 
                                 if (kotlin.math.abs(dx) > 0 || kotlin.math.abs(dy) > 0) {
-                                    viewModel.sendButtonCommand("trackpad move $dx $dy")
+                                    // UDP Protocol: mov|x,y
+                                    viewModel.sendUdpCommand("mov|$dx,$dy")
                                 }
                             }
                         }
                 ) {
                     Text(
-                        "Swipe to Move\nTap to Click",
+                        "Swipe to Move\nTap: Left Click | Hold: Right Click",
                         color = DarkPrimary.copy(alpha = 0.4f),
                         modifier = Modifier.align(Alignment.Center),
                         fontSize = 14.sp,

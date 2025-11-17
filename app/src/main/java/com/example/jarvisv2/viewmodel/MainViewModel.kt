@@ -141,6 +141,7 @@ class MainViewModel(
                                 val lastButtonCmd = _lastButtonCommand.value
                                 for (event in response.events) {
                                     if (event.type == "speak") {
+                                        // Don't log ephemeral button responses if we tracked them
                                         if (lastButtonCmd != null && event.text.equals(lastButtonCmd, ignoreCase = true)) {
                                             _lastButtonCommand.value = null
                                             Log.d("ViewModel", "Swallowed button response: ${event.text}")
@@ -204,6 +205,28 @@ class MainViewModel(
     fun sendButtonCommand(command: String) {
         _lastButtonCommand.value = command
         sendCommand(command)
+    }
+
+    // --- UDP Command Logic ---
+    fun sendUdpCommand(message: String) {
+        // We need the base IP from the current server URL
+        val fullUrl = _serverUrl.value ?: return
+
+        viewModelScope.launch {
+            try {
+                // Example URL: "http://192.168.1.15:8765" -> "192.168.1.15"
+                val hostIp = fullUrl
+                    .removePrefix("http://")
+                    .removePrefix("https://")
+                    .substringBefore(":")
+
+                if (hostIp.isNotEmpty()) {
+                    apiClient.sendUdpCommand(hostIp, message)
+                }
+            } catch (e: Exception) {
+                Log.e("MainViewModel", "Error sending UDP command: ${e.message}")
+            }
+        }
     }
 
     fun toggleVoiceService() {

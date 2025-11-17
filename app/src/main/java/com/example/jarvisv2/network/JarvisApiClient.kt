@@ -34,12 +34,11 @@ data class JarvisCommandRequest(val command: String, val token: String)
 @Serializable
 data class JarvisCommandResponse(val ok: Boolean, val request_id: String)
 
-// --- NEW DATA CLASSES FOR EVENT POLLING ---
 @Serializable
 data class JarvisEvent(
     val id: Int,
     val ts: Double,
-    val type: String, // We will look for "speak"
+    val type: String,
     val text: String
 )
 
@@ -48,12 +47,11 @@ data class JarvisEventResponse(
     val events: List<JarvisEvent>,
     val last_id: Int
 )
-// ----------------------------------------
 
 class JarvisApiClient(private val context: Context) {
 
     private val client = HttpClient(Android) {
-        expectSuccess = false // Handle non-200 responses manually if needed
+        expectSuccess = false
         install(ContentNegotiation) {
             json()
         }
@@ -81,8 +79,9 @@ class JarvisApiClient(private val context: Context) {
 
             val hostAddress = getLocalIpAddress(wifiManager)
             if (hostAddress == null) {
-                Log.e("JarvisApiClient", "Could not get local IP address.")
-                close(IllegalStateException("Could not get local IP address."))
+                Log.e("JarvisApiClient", "Could not get local IP address (Wifi might be off).")
+                // We close with an exception so the ViewModel knows to stop loading
+                close(IllegalStateException("Wifi is off or no IP address found."))
                 return@callbackFlow
             }
 
@@ -118,7 +117,7 @@ class JarvisApiClient(private val context: Context) {
 
         } catch (e: Exception) {
             Log.e("JarvisApiClient", "Error during mDNS discovery: ${e.message}", e)
-            close(e) // Close the flow with the exception
+            close(e)
         }
 
         awaitClose {
@@ -135,10 +134,13 @@ class JarvisApiClient(private val context: Context) {
 
     @Suppress("DEPRECATION")
     private fun getLocalIpAddress(wifiManager: WifiManager): String? {
-        val ipInt = wifiManager.dhcpInfo.ipAddress
+        // FIX: dhcpInfo can be null if Wifi is off
+        val dhcpInfo = wifiManager.dhcpInfo ?: return null
+
+        val ipInt = dhcpInfo.ipAddress
         if (ipInt == 0) return null
         return String.format(
-            java.util.Locale.US, // Use US locale to avoid formatting issues
+            java.util.Locale.US,
             "%d.%d.%d.%d",
             ipInt and 0xFF,
             ipInt shr 8 and 0xFF,
@@ -163,7 +165,6 @@ class JarvisApiClient(private val context: Context) {
         }
     }
 
-    // --- NEW FUNCTION FOR EVENT POLLING ---
     suspend fun getEvents(serverUrl: String, since: Int): Result<JarvisEventResponse> {
         return withContext(Dispatchers.IO) {
             try {

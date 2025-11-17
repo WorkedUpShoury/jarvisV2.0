@@ -1,6 +1,7 @@
 package com.example.jarvisv2.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
 import android.os.Parcelable
 import android.util.Log
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch // <-- Added Import
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -38,6 +40,8 @@ class MainViewModel(
     private val apiClient = JarvisApiClient(app.applicationContext)
     private val repository: ChatRepository
 
+    private val prefs = app.getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+
     // -----------------------------------------------------------------------------------------
     // INTERNAL STATES
     // -----------------------------------------------------------------------------------------
@@ -47,14 +51,8 @@ class MainViewModel(
     private val _lastCommandStatus = MutableStateFlow<CommandStatus>(CommandStatus.Idle)
     private val _commandText = MutableStateFlow("")
 
-    // Chat History now comes directly from the Database via the Repository
     val chatHistory: StateFlow<List<ChatMessage>>
 
-    // We still use SavedStateHandle to persist the lastEventId across process death
-    private val lastEventId: StateFlow<Int> =
-        savedStateHandle.getStateFlow("lastEventId", 0)
-
-    // This holds the last command sent from a button, so we can ignore its spoken response.
     private val _lastButtonCommand = MutableStateFlow<String?>(null)
 
     // -----------------------------------------------------------------------------------------
@@ -92,11 +90,9 @@ class MainViewModel(
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     init {
-        // Initialize the Database and Repository
         val chatDao = AppDatabase.getDatabase(app).chatDao()
         repository = ChatRepository(chatDao)
 
-        // Initialize the chatHistory Flow from the database
         chatHistory = repository.allMessages
             .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
@@ -108,10 +104,16 @@ class MainViewModel(
     private fun startServerDiscovery() {
         viewModelScope.launch {
             _isDiscovering.value = true
-            apiClient.discoverJarvisService().collect { url ->
-                _serverUrl.value = url
-                _isDiscovering.value = false
-            }
+            apiClient.discoverJarvisService()
+                .catch { e ->
+                    // --- FIX: Catch exceptions (like Wifi off) to prevent crash ---
+                    Log.e("MainViewModel", "Discovery failed: ${e.message}")
+                    _isDiscovering.value = false
+                }
+                .collect { url ->
+                    _serverUrl.value = url
+                    _isDiscovering.value = false
+                }
         }
     }
 
@@ -131,8 +133,10 @@ class MainViewModel(
         viewModelScope.launch {
             serverUrl.collect { url ->
                 if (url != null) {
+                    var currentLastId = prefs.getInt("last_event_id", 0)
+
                     while (true) {
-                        val result: Result<JarvisEventResponse> = apiClient.getEvents(url, lastEventId.value)
+                        val result: Result<JarvisEventResponse> = apiClient.getEvents(url, currentLastId)
                         result.fold(
                             onSuccess = { response ->
                                 val lastButtonCmd = _lastButtonCommand.value
@@ -146,7 +150,11 @@ class MainViewModel(
                                         }
                                     }
                                 }
-                                savedStateHandle["lastEventId"] = response.last_id
+
+                                if (response.last_id > currentLastId) {
+                                    currentLastId = response.last_id
+                                    prefs.edit().putInt("last_event_id", currentLastId).apply()
+                                }
                             },
                             onFailure = { delay(5000) }
                         )
@@ -208,7 +216,6 @@ class MainViewModel(
         }
     }
 
-    // Updated to save to the database instead of memory
     private fun addChatMessage(message: String, sender: ChatSender) {
         viewModelScope.launch {
             val chat = ChatMessage(message = message, sender = sender)
@@ -218,7 +225,7 @@ class MainViewModel(
 }
 
 // ---------------------------------------------------------------------------------------------
-// SUPPORTING TYPES (Parcelable)
+// SUPPORTING TYPES
 // ---------------------------------------------------------------------------------------------
 
 sealed class CommandStatus {

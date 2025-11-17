@@ -5,7 +5,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.jarvisv2.ui.theme.DarkOnSurface
@@ -19,18 +21,20 @@ fun ActionButton(
     icon: ImageVector,
     text: String,
     subtitle: String? = null,
+    containerColor: Color = DarkSurface, // Default to dark navy
+    elevation: Dp = 8.dp, // Default to standard elevation
     onClick: () -> Unit
 ) {
     ElevatedCard(
-        onClick = onClick, // <-- This is the fix
+        onClick = onClick,
         modifier = modifier
             .height(110.dp)
             .aspectRatio(1f),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
-            containerColor = DarkSurface // smooth navy background
+            containerColor = containerColor
         ),
-        elevation = CardDefaults.cardElevation(8.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = elevation)
     ) {
 
         Column(
@@ -41,11 +45,11 @@ fun ActionButton(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
-            // ICON — main color from theme
+            // ICON
             Icon(
                 imageVector = icon,
                 contentDescription = text,
-                tint = DarkPrimary, // matches your new modern blue
+                tint = DarkPrimary,
                 modifier = Modifier.size(34.dp)
             )
 
@@ -72,9 +76,7 @@ fun ActionButton(
 }
 
 /**
- * --- NEW OVERLOAD ---
- * This overload makes it easier to call from other screens
- * and ensures we use the silent `sendButtonCommand`.
+ * Overload for ViewModel usage
  */
 @Composable
 fun ActionButton(
@@ -82,6 +84,8 @@ fun ActionButton(
     icon: ImageVector,
     text: String,
     subtitle: String? = null,
+    containerColor: Color = DarkSurface,
+    elevation: Dp = 8.dp,
     viewModel: MainViewModel,
     command: String
 ) {
@@ -90,6 +94,8 @@ fun ActionButton(
         icon = icon,
         text = text,
         subtitle = subtitle,
-        onClick = { viewModel.sendButtonCommand(command) } // <-- Calls silent command
+        containerColor = containerColor,
+        elevation = elevation,
+        onClick = { viewModel.sendButtonCommand(command) }
     )
 }

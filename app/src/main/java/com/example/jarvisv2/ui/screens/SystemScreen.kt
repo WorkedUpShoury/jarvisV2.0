@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.jarvisv2.ui.theme.DarkOnSurface
@@ -22,7 +23,7 @@ import com.example.jarvisv2.ui.theme.DarkSurface
 import com.example.jarvisv2.viewmodel.MainViewModel
 import kotlin.math.roundToInt
 
-// 1. Maintenance Actions (Now on Main Screen)
+// 1. Maintenance Actions (Main Screen)
 private val maintenanceActions = listOf(
     Action("Refresh", Icons.Default.Refresh, "refresh"),
     Action("Sleep Jarvis", Icons.Default.BedtimeOff, "go to sleep"),
@@ -50,21 +51,24 @@ fun SystemScreen(viewModel: MainViewModel) {
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        // --- Maintenance Section (Top) ---
+        // --- Maintenance Section (Top - No Background) ---
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.heightIn(max = 200.dp)
+            columns = GridCells.Fixed(4), // 4 items in one row looks better without cards
+            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 0.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.height(100.dp) // Fixed height for single row
         ) {
             items(maintenanceActions) { action ->
                 ActionButton(
-                    modifier = Modifier.height(75.dp), // Compact height
+                    modifier = Modifier.fillMaxHeight(),
                     icon = action.icon,
                     text = action.name,
                     viewModel = viewModel,
-                    command = action.command
+                    command = action.command,
+                    // --- NO BACKGROUND ---
+                    containerColor = Color.Transparent,
+                    elevation = 0.dp
                 )
             }
         }

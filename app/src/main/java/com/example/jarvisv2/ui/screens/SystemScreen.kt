@@ -23,10 +23,10 @@ import com.example.jarvisv2.ui.theme.DarkSurface
 import com.example.jarvisv2.viewmodel.MainViewModel
 import kotlin.math.roundToInt
 
-// 1. Maintenance Actions (Main Screen)
+// 1. Maintenance Actions
 private val maintenanceActions = listOf(
     Action("Refresh", Icons.Default.Refresh, "refresh"),
-    Action("Sleep Jarvis", Icons.Default.BedtimeOff, "go to sleep"),
+    Action("Sleep", Icons.Default.BedtimeOff, "go to sleep"), // <--- Renamed to "Sleep" for better alignment
     Action("Gestures", Icons.Default.BackHand, "enable gestures"),
     Action("Diagnostics", Icons.Default.MonitorHeart, "status")
 )
@@ -51,9 +51,9 @@ fun SystemScreen(viewModel: MainViewModel) {
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        // --- Maintenance Section (Top - No Background) ---
+        // --- Maintenance Section (Top) ---
         LazyVerticalGrid(
-            columns = GridCells.Fixed(4), // 4 items in one row looks better without cards
+            columns = GridCells.Fixed(4), // 4 items in one row
             contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 0.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -66,12 +66,15 @@ fun SystemScreen(viewModel: MainViewModel) {
                     text = action.name,
                     viewModel = viewModel,
                     command = action.command,
-                    // --- NO BACKGROUND ---
+                    // --- TRANSPARENCY RESTORED ---
                     containerColor = Color.Transparent,
                     elevation = 0.dp
                 )
             }
         }
+
+        // --- ADDED SPACING ---
+        Spacer(modifier = Modifier.height(24.dp))
 
         // --- Window Actions ---
         WindowActionsCard(viewModel = viewModel)

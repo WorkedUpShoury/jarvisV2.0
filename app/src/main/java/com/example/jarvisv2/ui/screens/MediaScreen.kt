@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,10 +36,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import com.example.jarvisv2.ui.theme.DarkPrimary
+import com.example.jarvisv2.ui.theme.DarkSurface
 import com.example.jarvisv2.viewmodel.MainViewModel
 
 @Composable
-fun MediaScreen(viewModel: MainViewModel) {
+fun MediaScreen(
+    viewModel: MainViewModel,
+    onGameModeClick: () -> Unit // <--- NEW: Callback for Game Mode
+) {
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -52,6 +57,16 @@ fun MediaScreen(viewModel: MainViewModel) {
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // --- Added Game Mode Button Here ---
+            item {
+                ActionButton(
+                    icon = Icons.Default.SportsEsports,
+                    text = "Game Mode",
+                    containerColor = DarkSurface, // Standard card color
+                    onClick = onGameModeClick
+                )
+            }
+
             item {
                 ActionButton(icon = Icons.Default.SkipPrevious, text = "Prev", viewModel = viewModel, command = "previous track")
             }

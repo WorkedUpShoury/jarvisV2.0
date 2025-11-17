@@ -30,6 +30,7 @@ import com.example.jarvisv2.ui.components.ConnectionStatusIcon
 import com.example.jarvisv2.ui.components.VoiceStatusIcon
 import com.example.jarvisv2.ui.screens.AppsScreen
 import com.example.jarvisv2.ui.screens.ChatScreen
+import com.example.jarvisv2.ui.screens.GameScreen
 import com.example.jarvisv2.ui.screens.MediaScreen
 import com.example.jarvisv2.ui.screens.SystemScreen
 import com.example.jarvisv2.ui.screens.WebScreen
@@ -45,6 +46,7 @@ fun AppRoot(
 ) {
     val navController = rememberNavController()
 
+    // Game screen is intentionally excluded from the bottom bar
     val items = listOf(
         BottomNavItem.System,
         BottomNavItem.Media,
@@ -59,29 +61,32 @@ fun AppRoot(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Jarvis V2 Control") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = DarkSurface
-                ),
-                navigationIcon = {
-                    ConnectionStatusIcon(
-                        serverUrlFlow = viewModel.serverUrl,
-                        isDiscoveringFlow = viewModel.isDiscovering
-                    )
-                },
-                actions = {
-                    VoiceStatusIcon(
-                        detailedStateFlow = viewModel.detailedVoiceState,
-                        onToggle = onToggleVoiceService
-                    )
-                }
-            )
+            if (currentRoute != BottomNavItem.Game.route) {
+                TopAppBar(
+                    title = { Text("Jarvis V2 Control") },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = DarkSurface
+                    ),
+                    navigationIcon = {
+                        ConnectionStatusIcon(
+                            serverUrlFlow = viewModel.serverUrl,
+                            isDiscoveringFlow = viewModel.isDiscovering
+                        )
+                    },
+                    actions = {
+                        VoiceStatusIcon(
+                            detailedStateFlow = viewModel.detailedVoiceState,
+                            onToggle = onToggleVoiceService
+                        )
+                    }
+                )
+            }
         },
         floatingActionButton = {
-            // Only show FAB on non-Chat screens
+            val hideFab = currentRoute == BottomNavItem.Chat.route || currentRoute == BottomNavItem.Game.route
+
             AnimatedVisibility(
-                visible = currentRoute != BottomNavItem.Chat.route,
+                visible = !hideFab,
                 enter = fadeIn() + slideInVertically { it / 2 },
                 exit = fadeOut() + slideOutVertically { it / 2 }
             ) {
@@ -95,7 +100,6 @@ fun AppRoot(
                             horizontalAlignment = Alignment.End,
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            // 1. Play Button
                             SmallFloatingActionButton(
                                 onClick = {
                                     viewModel.sendButtonCommand("resume playback")
@@ -106,7 +110,6 @@ fun AppRoot(
                                 Icon(Icons.Default.PlayArrow, "Play")
                             }
 
-                            // 2. Next Button
                             SmallFloatingActionButton(
                                 onClick = {
                                     viewModel.sendButtonCommand("next track")
@@ -117,7 +120,6 @@ fun AppRoot(
                                 Icon(Icons.Default.SkipNext, "Next")
                             }
 
-                            // 3. Mute Button
                             SmallFloatingActionButton(
                                 onClick = {
                                     viewModel.sendButtonCommand("mute volume")
@@ -128,7 +130,6 @@ fun AppRoot(
                                 Icon(Icons.Default.VolumeOff, "Mute")
                             }
 
-                            // 4. Music Button (Navigates to Media Screen)
                             SmallFloatingActionButton(
                                 onClick = {
                                     navController.navigate(BottomNavItem.Media.route) {
@@ -147,7 +148,6 @@ fun AppRoot(
                         }
                     }
 
-                    // Main FAB Button
                     FloatingActionButton(
                         onClick = { isFabExpanded = !isFabExpanded },
                         containerColor = DarkPrimary
@@ -156,7 +156,6 @@ fun AppRoot(
                             if (it) {
                                 Icon(Icons.Default.Close, contentDescription = "Close")
                             } else {
-                                // --- CHANGED TO MEDIA ICON ---
                                 Icon(Icons.Default.MusicNote, contentDescription = "Media Menu")
                             }
                         }
@@ -165,22 +164,24 @@ fun AppRoot(
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = DarkSurface) {
-                items.forEach { item ->
-                    NavigationBarItem(
-                        selected = currentRoute == item.route,
-                        onClick = {
-                            navController.navigate(item.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            if (currentRoute != BottomNavItem.Game.route) {
+                NavigationBar(containerColor = DarkSurface) {
+                    items.forEach { item ->
+                        NavigationBarItem(
+                            selected = currentRoute == item.route,
+                            onClick = {
+                                navController.navigate(item.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    restoreState = true
+                                    launchSingleTop = true
                                 }
-                                restoreState = true
-                                launchSingleTop = true
-                            }
-                        },
-                        icon = { Icon(item.icon, item.label) },
-                        label = { Text(item.label) }
-                    )
+                            },
+                            icon = { Icon(item.icon, item.label) },
+                            label = { Text(item.label) }
+                        )
+                    }
                 }
             }
         }
@@ -192,13 +193,24 @@ fun AppRoot(
             modifier = Modifier.padding(paddingValues)
         ) {
             composable(BottomNavItem.System.route) {
-                SystemScreen(viewModel)
+                SystemScreen(viewModel = viewModel)
             }
             composable(BottomNavItem.Media.route) {
-                MediaScreen(viewModel)
+                MediaScreen(
+                    viewModel = viewModel,
+                    onGameModeClick = {
+                        navController.navigate(BottomNavItem.Game.route) {
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
             }
             composable(BottomNavItem.Apps.route) {
                 AppsScreen(viewModel)
+            }
+            composable(BottomNavItem.Game.route) {
+                GameScreen(viewModel)
             }
             composable(BottomNavItem.Web.route) {
                 WebScreen(viewModel)

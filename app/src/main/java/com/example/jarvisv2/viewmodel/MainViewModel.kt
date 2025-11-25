@@ -14,9 +14,11 @@ import com.example.jarvisv2.data.allCommands
 import com.example.jarvisv2.network.JarvisApiClient
 import com.example.jarvisv2.network.JarvisCommandResponse
 import com.example.jarvisv2.network.MediaStateResponse
+import com.example.jarvisv2.service.JarvisMediaService
 import com.example.jarvisv2.service.JarvisVoiceService
 import com.example.jarvisv2.service.JarvisVoiceService.Companion.ServiceState
 import com.example.jarvisv2.service.VoiceListener
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -31,7 +33,6 @@ class MainViewModel(
 
     private val apiClient = JarvisApiClient(app.applicationContext)
     private val repository: ChatRepository
-    // Note: No SharedPrefs for event ID to prevent sync issues
 
     // --- STATES ---
     private val _serverUrl = MutableStateFlow<String?>(null)
@@ -40,19 +41,14 @@ class MainViewModel(
     private val _commandText = MutableStateFlow("")
     private val _lastButtonCommand = MutableStateFlow<String?>(null)
 
-    // System Levels
     private val _volumeLevel = MutableStateFlow(5f)
     private val _brightnessLevel = MutableStateFlow(5f)
 
-    // Media State: Observe the Service's shared state (Single Source of Truth)
-    // This ensures UI matches the background notification
-    val mediaState: StateFlow<MediaStateResponse?> = JarvisVoiceService.sharedMediaState.asStateFlow()
+    val mediaState: StateFlow<MediaStateResponse?> = JarvisMediaService.sharedMediaState.asStateFlow()
 
-    // Connection Health
     private var consecutiveFailures = 0
     private var discoveryJob: Job? = null
 
-    // Public Flows
     val serverUrl: StateFlow<String?> = _serverUrl.asStateFlow()
     val isDiscovering: StateFlow<Boolean> = _isDiscovering.asStateFlow()
     val commandText: StateFlow<String> = _commandText.asStateFlow()
@@ -79,13 +75,10 @@ class MainViewModel(
         chatHistory = repository.allMessages.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
         startServerDiscovery()
-        observeVoiceServiceCommands()
-        startEventPolling()
+        // No separate voice command observer needed for history now, polling handles it
+        startHistoryPolling()
     }
 
-    // -----------------------------------------------------------------------------------------
-    // SERVER DISCOVERY & CONNECTION
-    // -----------------------------------------------------------------------------------------
     private fun startServerDiscovery() {
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
@@ -94,7 +87,6 @@ class MainViewModel(
 
             apiClient.discoverJarvisService()
                 .catch { e ->
-                    Log.e("MainViewModel", "Discovery failed: ${e.message}")
                     _isDiscovering.value = false
                     delay(3000)
                     startServerDiscovery()
@@ -104,18 +96,13 @@ class MainViewModel(
                     _isDiscovering.value = false
                     consecutiveFailures = 0
 
-                    // --- SYNC WITH SERVICE ---
-                    // Pass URL to Service so it can poll media in background
-                    JarvisVoiceService.serverUrl = url
-
-                    // Ensure service is running for notifications
-                    if (JarvisVoiceService.serviceState.value == ServiceState.Running) {
-                        val intent = Intent(app.applicationContext, JarvisVoiceService::class.java)
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                            app.applicationContext.startForegroundService(intent)
-                        } else {
-                            app.applicationContext.startService(intent)
-                        }
+                    // Sync Media Service
+                    JarvisMediaService.serverUrl = url
+                    val mediaIntent = Intent(app.applicationContext, JarvisMediaService::class.java)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        app.applicationContext.startForegroundService(mediaIntent)
+                    } else {
+                        app.applicationContext.startService(mediaIntent)
                     }
 
                     fetchSystemLevels()
@@ -123,43 +110,72 @@ class MainViewModel(
         }
     }
 
-    private fun reportConnectionFailure() {
-        consecutiveFailures++
-        if (consecutiveFailures >= 3) {
-            consecutiveFailures = 0
-            startServerDiscovery()
+    // --- NEW: HISTORY POLLING (Source of Truth) ---
+    private fun startHistoryPolling() {
+        viewModelScope.launch {
+            serverUrl.collect { url ->
+                if (url != null) {
+                    var processedCount = 0
+
+                    while (true) {
+                        if (_serverUrl.value == url) {
+                            apiClient.getChatHistory(url).fold(
+                                onSuccess = { history ->
+                                    consecutiveFailures = 0
+
+                                    // If history on server shrunk (new day), reset
+                                    if (history.size < processedCount) {
+                                        processedCount = 0
+                                    }
+
+                                    // Process new items
+                                    if (history.size > processedCount) {
+                                        val newItems = history.subList(processedCount, history.size)
+                                        for (item in newItems) {
+                                            val sender = if (item.role == "user") ChatSender.User else ChatSender.System
+                                            val message = item.parts.text
+
+                                            // Insert into local DB for display
+                                            repository.insert(ChatMessage(message = message, sender = sender))
+                                        }
+                                        processedCount = history.size
+                                    }
+                                },
+                                onFailure = {
+                                    consecutiveFailures++
+                                    if (consecutiveFailures > 3) startServerDiscovery()
+                                    delay(3000)
+                                }
+                            )
+                        }
+                        delay(1500) // Poll every 1.5s
+                    }
+                }
+            }
         }
     }
 
-    // -----------------------------------------------------------------------------------------
-    // SYSTEM LEVELS
-    // -----------------------------------------------------------------------------------------
     fun fetchSystemLevels() {
         val url = _serverUrl.value ?: return
         viewModelScope.launch {
-            apiClient.getSystemLevels(url).fold(
-                onSuccess = { levels ->
-                    _volumeLevel.value = levels.volume / 10f
-                    _brightnessLevel.value = levels.brightness / 10f
-                },
-                onFailure = { reportConnectionFailure() }
-            )
+            apiClient.getSystemLevels(url).onSuccess { levels ->
+                _volumeLevel.value = levels.volume / 10f
+                _brightnessLevel.value = levels.brightness / 10f
+            }
         }
     }
 
     fun updateVolumeState(newVal: Float) { _volumeLevel.value = newVal }
     fun updateBrightnessState(newVal: Float) { _brightnessLevel.value = newVal }
 
-    // -----------------------------------------------------------------------------------------
-    // COMMANDS
-    // -----------------------------------------------------------------------------------------
     fun onCommandTextChanged(text: String) { _commandText.value = text }
 
     fun sendCurrentCommand() {
         val command = _commandText.value.trim()
         if (command.isEmpty()) return
         val commandToSend = if (command.startsWith("/")) command.substring(1) else command
-        addChatMessage(commandToSend, ChatSender.User)
+
+        // DO NOT add locally. Let server add to history file, then we poll it.
         sendCommand(commandToSend)
         _commandText.value = ""
     }
@@ -167,7 +183,10 @@ class MainViewModel(
     private fun sendCommand(command: String) {
         val url = _serverUrl.value
         if (url == null) {
-            addChatMessage("Error: Server not found.", ChatSender.System)
+            // If disconnected, we can show a local error
+            viewModelScope.launch {
+                repository.insert(ChatMessage(message = "Error: Server not found.", sender = ChatSender.System))
+            }
             startServerDiscovery()
             return
         }
@@ -177,12 +196,9 @@ class MainViewModel(
             apiClient.sendCommand(url, command).fold(
                 onSuccess = {
                     _lastCommandStatus.value = CommandStatus.Success
-                    consecutiveFailures = 0
                 },
                 onFailure = {
                     _lastCommandStatus.value = CommandStatus.Error(it.message ?: "Unknown error")
-                    addChatMessage("Error: ${it.message}", ChatSender.System)
-                    reportConnectionFailure()
                 }
             )
         }
@@ -199,49 +215,7 @@ class MainViewModel(
             try {
                 val hostIp = fullUrl.removePrefix("http://").removePrefix("https://").substringBefore(":")
                 if (hostIp.isNotEmpty()) apiClient.sendUdpCommand(hostIp, message)
-            } catch (e: Exception) {
-                Log.e("MainViewModel", "Error sending UDP command: ${e.message}")
-            }
-        }
-    }
-
-    // -----------------------------------------------------------------------------------------
-    // EVENT POLLING
-    // -----------------------------------------------------------------------------------------
-    private fun startEventPolling() {
-        viewModelScope.launch {
-            serverUrl.collect { url ->
-                if (url != null) {
-                    var currentLastId = 0
-                    while (true) {
-                        if (_serverUrl.value == url) {
-                            apiClient.getEvents(url, currentLastId).fold(
-                                onSuccess = { response ->
-                                    consecutiveFailures = 0
-                                    if (response.last_id < currentLastId) {
-                                        currentLastId = 0
-                                    } else {
-                                        val lastButtonCmd = _lastButtonCommand.value
-                                        for (event in response.events) {
-                                            if (event.type == "chat") {
-                                                addChatMessage(event.text, ChatSender.System)
-                                            }
-                                        }
-                                        if (response.last_id > currentLastId) {
-                                            currentLastId = response.last_id
-                                        }
-                                    }
-                                },
-                                onFailure = {
-                                    reportConnectionFailure()
-                                    delay(3000)
-                                }
-                            )
-                        }
-                        delay(1000)
-                    }
-                }
-            }
+            } catch (e: Exception) { }
         }
     }
 
@@ -255,23 +229,6 @@ class MainViewModel(
             } else {
                 app.applicationContext.startService(intent)
             }
-        }
-    }
-
-    private fun observeVoiceServiceCommands() {
-        JarvisVoiceService.latestVoiceResult
-            .filter { it.isNotEmpty() }
-            .onEach { command ->
-                addChatMessage(command, ChatSender.User)
-                sendCommand(command)
-                JarvisVoiceService.latestVoiceResult.value = ""
-            }
-            .launchIn(viewModelScope)
-    }
-
-    private fun addChatMessage(message: String, sender: ChatSender) {
-        viewModelScope.launch {
-            repository.insert(ChatMessage(message = message, sender = sender))
         }
     }
 

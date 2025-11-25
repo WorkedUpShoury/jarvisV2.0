@@ -36,11 +36,24 @@ data class JarvisCommandRequest(val command: String, val token: String)
 @Serializable
 data class JarvisCommandResponse(val ok: Boolean, val request_id: String)
 
+// OLD Event classes (Can keep for legacy/other events if needed)
 @Serializable
 data class JarvisEvent(val id: Int, val ts: Double, val type: String, val text: String)
-
 @Serializable
 data class JarvisEventResponse(val events: List<JarvisEvent>, val last_id: Int)
+
+// NEW History Classes
+@Serializable
+data class HistoryItem(
+    val type: String,
+    val role: String,
+    val parts: HistoryParts
+)
+
+@Serializable
+data class HistoryParts(
+    val text: String
+)
 
 @Serializable
 data class SystemLevelsResponse(val volume: Int, val brightness: Int)
@@ -57,7 +70,11 @@ class JarvisApiClient(private val context: Context) {
 
     private val client = HttpClient(Android) {
         expectSuccess = false
-        install(ContentNegotiation) { json() }
+        install(ContentNegotiation) {
+            json(kotlinx.serialization.json.Json {
+                ignoreUnknownKeys = true // Important for complex JSON
+            })
+        }
         install(Logging) {
             level = LogLevel.ALL
             logger = object : Logger { override fun log(message: String) { Log.d("KtorClient", message) } }
@@ -95,6 +112,18 @@ class JarvisApiClient(private val context: Context) {
         return withContext(Dispatchers.IO) {
             try {
                 val response: MediaStateResponse = client.get("$serverUrl/api/media") {
+                    url { parameters.append("token", apiToken) }
+                }.body()
+                Result.success(response)
+            } catch (e: Exception) { Result.failure(e) }
+        }
+    }
+
+    // --- NEW: Get Full Chat History ---
+    suspend fun getChatHistory(serverUrl: String): Result<List<HistoryItem>> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response: List<HistoryItem> = client.get("$serverUrl/api/history") {
                     url { parameters.append("token", apiToken) }
                 }.body()
                 Result.success(response)

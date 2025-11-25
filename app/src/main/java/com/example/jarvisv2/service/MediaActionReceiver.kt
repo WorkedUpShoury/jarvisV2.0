@@ -9,8 +9,8 @@ class MediaActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val action = intent.action ?: return
 
-        // Forward the action to the Service
-        val serviceIntent = Intent(context, JarvisVoiceService::class.java).apply {
+        // Forward to the NEW Media Service
+        val serviceIntent = Intent(context, JarvisMediaService::class.java).apply {
             this.action = action
         }
 

@@ -42,7 +42,12 @@
         <service
             android:name=".service.JarvisVoiceService"
             android:exported="false"
-            android:foregroundServiceType="microphone|mediaPlayback" />
+            android:foregroundServiceType="microphone" />
+
+        <service
+            android:name=".service.JarvisMediaService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <receiver android:name=".service.MediaActionReceiver"
             android:exported="false">

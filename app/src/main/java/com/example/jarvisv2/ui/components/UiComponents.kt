@@ -86,7 +86,7 @@ fun ConnectionStatusIcon(
 }
 
 // ============================================================================
-//  VOICE STATUS ICON (Replaced ToggleButton)
+//  VOICE STATUS ICON
 // ============================================================================
 @Composable
 fun VoiceStatusIcon(
@@ -131,44 +131,74 @@ fun VoiceStatusIcon(
     }
 }
 
-
 // ============================================================================
-//  CHAT BUBBLE (Copy on Click, Delete on Long Press)
+//  CHAT BUBBLE (Long Press Menu: Copy, Repeat, Delete)
 // ============================================================================
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatBubble(
     chat: ChatMessage,
-    onDelete: () -> Unit = {}
+    onDelete: () -> Unit = {},
+    onRepeat: (() -> Unit)? = null
 ) {
     val isUser = chat.sender == ChatSender.User
-
-    val bubbleColor =
-        if (isUser) DarkPrimary else DarkSurface
-
-    val textColor =
-        if (isUser) DarkOnPrimary else DarkOnSurface
-
+    val bubbleColor = if (isUser) DarkPrimary else DarkSurface
+    val textColor = if (isUser) DarkOnPrimary else DarkOnSurface
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    var showDeleteDialog by remember { mutableStateOf(false) }
+    var showOptionsDialog by remember { mutableStateOf(false) }
 
-    if (showDeleteDialog) {
+    // Options Dialog
+    if (showOptionsDialog) {
         AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("Delete Message?") },
-            text = { Text("This message will be removed from history.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onDelete()
-                    showDeleteDialog = false
-                }) {
-                    Text("Delete", color = DarkError)
+            onDismissRequest = { showOptionsDialog = false },
+            title = { Text("Message Options", color = Color.White) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // 1. Copy
+                    TextButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(chat.message))
+                            Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                            showOptionsDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Copy Text", color = DarkOnSurface)
+                    }
+
+                    // 2. Repeat (User only)
+                    if (onRepeat != null) {
+                        TextButton(
+                            onClick = {
+                                onRepeat()
+                                showOptionsDialog = false
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Repeat Command", color = DarkPrimary)
+                        }
+                    }
+
+                    // 3. Delete
+                    TextButton(
+                        onClick = {
+                            onDelete()
+                            showOptionsDialog = false
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Delete", color = DarkError)
+                    }
                 }
             },
+            confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("Cancel", color = DarkOnSurface)
+                TextButton(onClick = { showOptionsDialog = false }) {
+                    Text("Cancel", color = Color.Gray)
                 }
             },
             containerColor = DarkSurface,
@@ -190,13 +220,12 @@ fun ChatBubble(
                 .background(bubbleColor)
                 .combinedClickable(
                     onClick = {
+                        // Tap to copy quickly
                         clipboardManager.setText(AnnotatedString(chat.message))
-                        Toast
-                            .makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT)
-                            .show()
+                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
                     },
                     onLongClick = {
-                        showDeleteDialog = true
+                        showOptionsDialog = true
                     }
                 )
                 .padding(horizontal = 12.dp, vertical = 8.dp)
@@ -224,7 +253,7 @@ fun CommandInputBar(
             .background(DarkSurface)
             .padding(8.dp)
     ) {
-
+        // Suggestions Row
         if (suggestions.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier
@@ -240,6 +269,7 @@ fun CommandInputBar(
             }
         }
 
+        // Text Field
         OutlinedTextField(
             value = text,
             onValueChange = onTextChanged,
@@ -278,14 +308,14 @@ fun CommandInputBar(
 }
 
 // ============================================================================
-//  SUGGESTION CHIP
+//  SUGGESTION CHIP (Fixed Outline)
 // ============================================================================
 @Composable
 fun SuggestionChip(text: String, onClick: () -> Unit) {
+    // Using Surface with 'shape' fixes the clipping/outline issue
     Surface(
-        modifier = Modifier
-            .clip(RoundedCornerShape(14.dp))
-            .clickable(onClick = onClick),
+        onClick = onClick,
+        shape = RoundedCornerShape(14.dp),
         color = Color.Black,
         border = BorderStroke(1.dp, DarkPrimary)
     ) {

@@ -18,6 +18,7 @@ import com.example.jarvisv2.ui.components.CommandInputBar
 import com.example.jarvisv2.ui.theme.DarkError
 import com.example.jarvisv2.ui.theme.DarkOnSurface
 import com.example.jarvisv2.ui.theme.DarkSurface
+import com.example.jarvisv2.viewmodel.ChatSender
 import com.example.jarvisv2.viewmodel.MainViewModel
 
 @Composable
@@ -117,7 +118,11 @@ fun ChatScreen(viewModel: MainViewModel) {
             items(chatHistory) { chat ->
                 ChatBubble(
                     chat = chat,
-                    onDelete = { viewModel.deleteChatMessage(chat) }
+                    onDelete = { viewModel.deleteChatMessage(chat) },
+                    onRepeat = if (chat.sender == ChatSender.User) {
+                        // Only allow repeating user commands
+                        { viewModel.sendButtonCommand(chat.message) }
+                    } else null
                 )
             }
         }

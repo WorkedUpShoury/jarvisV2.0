@@ -40,8 +40,8 @@ private val windowRowActions = listOf(
 
 // 3. System & Navigation Actions (Main Grid)
 private val systemGridActions = listOf(
-    Action("Switch Tab", Icons.Default.SwapHoriz, "alt tab"), // <-- Added
-    Action("Next Tab", Icons.Default.DynamicFeed, "ctrl tab"), // <-- Added
+    Action("Switch Tab", Icons.Default.SwapHoriz, "alt tab"),
+    Action("Next Tab", Icons.Default.DynamicFeed, "ctrl tab"),
     Action("Lock", Icons.Default.Lock, "lock screen"),
     Action("Shutdown", Icons.Default.PowerSettingsNew, "shutdown"),
     Action("Restart", Icons.Default.RestartAlt, "restart"),
@@ -50,6 +50,12 @@ private val systemGridActions = listOf(
 
 @Composable
 fun SystemScreen(viewModel: MainViewModel) {
+
+    // Trigger refresh when screen opens
+    LaunchedEffect(Unit) {
+        viewModel.fetchSystemLevels()
+    }
+
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -64,7 +70,7 @@ fun SystemScreen(viewModel: MainViewModel) {
             items(maintenanceActions) { action ->
                 ActionButton(
                     modifier = Modifier.fillMaxHeight(),
-                    icon = action.icon!!, // Safe assert as these use vector icons
+                    icon = action.icon!!,
                     text = action.name,
                     viewModel = viewModel,
                     command = action.command,
@@ -151,13 +157,16 @@ private fun WindowActionsCard(viewModel: MainViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VolumeSlider(viewModel: MainViewModel) {
-    var sliderPosition by remember { mutableFloatStateOf(5f) }
+    val sliderPosition by viewModel.volumeLevel.collectAsState()
+
     Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
-        Text("Volume: ${sliderPosition.roundToInt()}", style = MaterialTheme.typography.bodyMedium)
+        Text("Volume: ${(sliderPosition * 10).roundToInt()}%", style = MaterialTheme.typography.bodyMedium)
         Spacer(modifier = Modifier.height(4.dp))
         Slider(
             value = sliderPosition,
-            onValueChange = { sliderPosition = it },
+            onValueChange = {
+                viewModel.updateVolumeState(it)
+            },
             valueRange = 0f..10f,
             steps = 9,
             onValueChangeFinished = {
@@ -178,13 +187,16 @@ fun VolumeSlider(viewModel: MainViewModel) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrightnessSlider(viewModel: MainViewModel) {
-    var sliderPosition by remember { mutableFloatStateOf(5f) }
+    val sliderPosition by viewModel.brightnessLevel.collectAsState()
+
     Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
-        Text("Brightness: ${sliderPosition.roundToInt()}", style = MaterialTheme.typography.bodyMedium)
+        Text("Brightness: ${(sliderPosition * 10).roundToInt()}%", style = MaterialTheme.typography.bodyMedium)
         Spacer(modifier = Modifier.height(4.dp))
         Slider(
             value = sliderPosition,
-            onValueChange = { sliderPosition = it },
+            onValueChange = {
+                viewModel.updateBrightnessState(it)
+            },
             valueRange = 0f..10f,
             steps = 9,
             onValueChangeFinished = {

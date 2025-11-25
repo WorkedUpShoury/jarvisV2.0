@@ -37,55 +37,68 @@ data class JarvisCommandRequest(val command: String, val token: String)
 data class JarvisCommandResponse(val ok: Boolean, val request_id: String)
 
 @Serializable
-data class JarvisEvent(
-    val id: Int,
-    val ts: Double,
-    val type: String,
-    val text: String
-)
+data class JarvisEvent(val id: Int, val ts: Double, val type: String, val text: String)
 
 @Serializable
-data class JarvisEventResponse(
-    val events: List<JarvisEvent>,
-    val last_id: Int
+data class JarvisEventResponse(val events: List<JarvisEvent>, val last_id: Int)
+
+@Serializable
+data class SystemLevelsResponse(val volume: Int, val brightness: Int)
+
+@Serializable
+data class MediaStateResponse(
+    val title: String,
+    val artist: String,
+    val is_playing: Boolean,
+    val thumbnail: String?
 )
 
 class JarvisApiClient(private val context: Context) {
 
     private val client = HttpClient(Android) {
         expectSuccess = false
-        install(ContentNegotiation) {
-            json()
-        }
+        install(ContentNegotiation) { json() }
         install(Logging) {
             level = LogLevel.ALL
-            logger = object : Logger {
-                override fun log(message: String) {
-                    Log.d("KtorClient", message)
-                }
-            }
+            logger = object : Logger { override fun log(message: String) { Log.d("KtorClient", message) } }
         }
     }
 
     private val apiToken = "jarvisrunning"
     private val udpPort = 8766
 
-    // -------------------------------------------------------------------------
-    // NEW UDP FUNCTION
-    // -------------------------------------------------------------------------
     suspend fun sendUdpCommand(host: String, message: String) {
         withContext(Dispatchers.IO) {
             try {
-                // Standard Java socket is fastest for this fire-and-forget usage
                 val socket = DatagramSocket()
                 val address = InetAddress.getByName(host)
                 val buffer = message.toByteArray()
                 val packet = DatagramPacket(buffer, buffer.size, address, udpPort)
                 socket.send(packet)
                 socket.close()
-            } catch (e: Exception) {
-                Log.e("JarvisUDP", "Send failed: ${e.message}")
-            }
+            } catch (e: Exception) { Log.e("JarvisUDP", "Send failed: ${e.message}") }
+        }
+    }
+
+    suspend fun getSystemLevels(serverUrl: String): Result<SystemLevelsResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response: SystemLevelsResponse = client.get("$serverUrl/api/levels") {
+                    url { parameters.append("token", apiToken) }
+                }.body()
+                Result.success(response)
+            } catch (e: Exception) { Result.failure(e) }
+        }
+    }
+
+    suspend fun getMediaState(serverUrl: String): Result<MediaStateResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response: MediaStateResponse = client.get("$serverUrl/api/media") {
+                    url { parameters.append("token", apiToken) }
+                }.body()
+                Result.success(response)
+            } catch (e: Exception) { Result.failure(e) }
         }
     }
 
@@ -98,77 +111,39 @@ class JarvisApiClient(private val context: Context) {
         try {
             lock.setReferenceCounted(true)
             lock.acquire()
-
             val hostAddress = getLocalIpAddress(wifiManager)
-            if (hostAddress == null) {
-                Log.e("JarvisApiClient", "Could not get local IP address (Wifi might be off).")
-                // We close with an exception so the ViewModel knows to stop loading
-                close(IllegalStateException("Wifi is off or no IP address found."))
-                return@callbackFlow
-            }
+            if (hostAddress == null) { close(IllegalStateException("Wifi is off.")); return@callbackFlow }
 
             Log.d("JarvisApiClient", "Starting jmDNS on $hostAddress")
             val inetAddress = InetAddress.getByName(hostAddress)
             jmdns = JmDNS.create(inetAddress, "JarvisClient")
 
             serviceListener = object : ServiceListener {
-                override fun serviceAdded(event: ServiceEvent) {
-                    Log.d("JarvisApiClient", "Service added: ${event.name}")
-                    jmdns?.requestServiceInfo(event.type, event.name, 1)
-                }
-
-                override fun serviceRemoved(event: ServiceEvent) {
-                    Log.d("JarvisApiClient", "Service removed: ${event.name}")
-                }
-
+                override fun serviceAdded(event: ServiceEvent) { jmdns?.requestServiceInfo(event.type, event.name, 1) }
+                override fun serviceRemoved(event: ServiceEvent) {}
                 override fun serviceResolved(event: ServiceEvent) {
-                    Log.d("JarvisApiClient", "Service resolved: ${event.info.name}")
                     val info = event.info
                     val port = info.port
                     val host = info.inetAddresses.firstOrNull()?.hostAddress
-                    if (host != null && port != 0) {
-                        val url = "http://$host:$port"
-                        Log.d("JarvisApiClient", "Jarvis found at: $url")
-                        trySend(url)
-                    }
+                    if (host != null && port != 0) trySend("http://$host:$port")
                 }
             }
-
             jmdns.addServiceListener("_jarvis._tcp.local.", serviceListener)
-            Log.d("JarvisApiClient", "Listening for _jarvis._tcp.local.")
-
-        } catch (e: Exception) {
-            Log.e("JarvisApiClient", "Error during mDNS discovery: ${e.message}", e)
-            close(e)
-        }
+        } catch (e: Exception) { close(e) }
 
         awaitClose {
-            Log.d("JarvisApiClient", "Closing mDNS discovery.")
-            if (jmdns != null && serviceListener != null) {
-                jmdns.removeServiceListener("_jarvis._tcp.local.", serviceListener)
-            }
+            if (jmdns != null && serviceListener != null) jmdns.removeServiceListener("_jarvis._tcp.local.", serviceListener)
             jmdns?.close()
-            if (lock.isHeld) {
-                lock.release()
-            }
+            if (lock.isHeld) lock.release()
         }
     }.flowOn(Dispatchers.IO)
 
     @Suppress("DEPRECATION")
     private fun getLocalIpAddress(wifiManager: WifiManager): String? {
-        // FIX: dhcpInfo can be null if Wifi is off
         val dhcpInfo = wifiManager.dhcpInfo ?: return null
-
         val ipInt = dhcpInfo.ipAddress
         if (ipInt == 0) return null
-        return String.format(
-            java.util.Locale.US,
-            "%d.%d.%d.%d",
-            ipInt and 0xFF,
-            ipInt shr 8 and 0xFF,
-            ipInt shr 16 and 0xFF,
-            ipInt shr 24 and 0xFF
-        )
+        return String.format(java.util.Locale.US, "%d.%d.%d.%d", ipInt and 0xFF, ipInt shr 8 and 0xFF, ipInt shr 16 and 0xFF, ipInt shr 24 and 0xFF)
     }
 
     suspend fun sendCommand(serverUrl: String, command: String): Result<JarvisCommandResponse> {
@@ -180,10 +155,7 @@ class JarvisApiClient(private val context: Context) {
                     setBody(requestBody)
                 }.body()
                 Result.success(response)
-            } catch (e: Exception) {
-                Log.e("JarvisApiClient", "Failed to send command: ${e.message}", e)
-                Result.failure(e)
-            }
+            } catch (e: Exception) { Result.failure(e) }
         }
     }
 
@@ -191,15 +163,10 @@ class JarvisApiClient(private val context: Context) {
         return withContext(Dispatchers.IO) {
             try {
                 val response: JarvisEventResponse = client.get("$serverUrl/events") {
-                    url {
-                        parameters.append("since", since.toString())
-                    }
+                    url { parameters.append("since", since.toString()) }
                 }.body()
                 Result.success(response)
-            } catch (e: Exception) {
-                Log.e("JarvisApiClient", "Failed to get events: ${e.message}", e)
-                Result.failure(e)
-            }
+            } catch (e: Exception) { Result.failure(e) }
         }
     }
 }

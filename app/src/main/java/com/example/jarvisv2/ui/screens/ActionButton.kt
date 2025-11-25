@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,15 +25,15 @@ fun ActionButton(
     text: String,
     subtitle: String? = null,
     containerColor: Color = DarkSurface,
-    elevation: Dp = 8.dp,
+    elevation: Dp = 6.dp, // Slightly reduced elevation for cleaner look
     onClick: () -> Unit
 ) {
     ElevatedCard(
         onClick = onClick,
         modifier = modifier
-            .height(110.dp)
-            .aspectRatio(1f),
-        shape = MaterialTheme.shapes.large,
+            .fillMaxWidth()
+            .height(95.dp), // Fixed height instead of AspectRatio for better fitting
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = containerColor
         ),
@@ -42,36 +43,36 @@ fun ActionButton(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(12.dp),
+                .padding(10.dp), // Reduced padding slightly
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
 
             // --- ICON LOGIC ---
             if (iconDrawable != null) {
-                // 1. Priority: Custom Drawable (Official Brand Icon)
                 Icon(
                     painter = painterResource(id = iconDrawable),
                     contentDescription = text,
-                    tint = Color.Unspecified, // Keeps original colors (if any)
-                    modifier = Modifier.size(34.dp)
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(30.dp) // Adjusted size
                 )
             } else if (icon != null) {
-                // 2. Fallback: Standard Vector Icon
                 Icon(
                     imageVector = icon,
                     contentDescription = text,
                     tint = DarkPrimary,
-                    modifier = Modifier.size(34.dp)
+                    modifier = Modifier.size(30.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = text,
                 color = DarkOnSurface,
-                fontSize = 13.sp
+                fontSize = 13.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
 
             if (!subtitle.isNullOrEmpty()) {
@@ -79,7 +80,8 @@ fun ActionButton(
                 Text(
                     subtitle,
                     fontSize = 10.sp,
-                    color = DarkOnSurface.copy(alpha = 0.7f)
+                    color = DarkOnSurface.copy(alpha = 0.7f),
+                    maxLines = 1
                 )
             }
         }
@@ -94,7 +96,7 @@ fun ActionButton(
     text: String,
     subtitle: String? = null,
     containerColor: Color = DarkSurface,
-    elevation: Dp = 8.dp,
+    elevation: Dp = 6.dp,
     viewModel: MainViewModel,
     command: String
 ) {

@@ -41,12 +41,12 @@ private val appActions = listOf(
 fun AppsScreen(viewModel: MainViewModel) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 110.dp),
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        // Updated padding: start/end/top=16dp, bottom=100dp to clear the navbar
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 100.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(appActions) { action ->
-            // --- UPDATED to use the new ActionButton overload ---
             ActionButton(
                 icon = action.icon,
                 text = action.name,

@@ -76,7 +76,9 @@ class MainViewModel(
 
         startServerDiscovery()
         // No separate voice command observer needed for history now, polling handles it
-        startHistoryPolling()
+        // However, we keep it to send commands
+        observeVoiceServiceCommands()
+        startHistoryPolling() // <--- NEW HISTORY METHOD
     }
 
     private fun startServerDiscovery() {
@@ -123,15 +125,16 @@ class MainViewModel(
                                 onSuccess = { history ->
                                     consecutiveFailures = 0
 
-                                    // If history on server shrunk (new day), reset
+                                    // If history on server shrunk (e.g. file cleared), reset local counter
                                     if (history.size < processedCount) {
                                         processedCount = 0
                                     }
 
-                                    // Process new items
+                                    // Process NEW items
                                     if (history.size > processedCount) {
                                         val newItems = history.subList(processedCount, history.size)
                                         for (item in newItems) {
+                                            // Convert server role to UI sender
                                             val sender = if (item.role == "user") ChatSender.User else ChatSender.System
                                             val message = item.parts.text
 
@@ -173,17 +176,18 @@ class MainViewModel(
     fun sendCurrentCommand() {
         val command = _commandText.value.trim()
         if (command.isEmpty()) return
-        val commandToSend = if (command.startsWith("/")) command.substring(1) else command
 
-        // DO NOT add locally. Let server add to history file, then we poll it.
-        sendCommand(commandToSend)
+        // We do NOT insert the message locally immediately.
+        // We send it to server -> Server writes to file -> We poll file -> UI updates.
+        // This guarantees perfect sync.
+        sendCommand(command)
         _commandText.value = ""
     }
 
     private fun sendCommand(command: String) {
         val url = _serverUrl.value
         if (url == null) {
-            // If disconnected, we can show a local error
+            // If disconnected, show local error
             viewModelScope.launch {
                 repository.insert(ChatMessage(message = "Error: Server not found.", sender = ChatSender.System))
             }
@@ -231,6 +235,20 @@ class MainViewModel(
             }
         }
     }
+
+    private fun observeVoiceServiceCommands() {
+        JarvisVoiceService.latestVoiceResult
+            .filter { it.isNotEmpty() }
+            .onEach { command ->
+                // Voice commands are sent to server, server writes to history
+                sendCommand(command)
+                JarvisVoiceService.latestVoiceResult.value = ""
+            }
+            .launchIn(viewModelScope)
+    }
+
+    // Removed manual addChatMessage (except for errors) since history poller handles it
+    // But we keep it private for internal error reporting if needed
 
     fun clearChatHistory() = viewModelScope.launch { repository.clearAll() }
     fun deleteChatMessage(message: ChatMessage) = viewModelScope.launch { repository.delete(message) }

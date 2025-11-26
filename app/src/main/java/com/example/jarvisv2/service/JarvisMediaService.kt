@@ -11,6 +11,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
+import android.support.v4.media.session.MediaSessionCompat
 import android.util.Base64
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -28,6 +29,9 @@ class JarvisMediaService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
     private lateinit var apiClient: JarvisApiClient
 
+    // MediaSession is required for Android 11+ controls to appear correctly
+    private lateinit var mediaSession: MediaSessionCompat
+
     companion object {
         // Actions
         const val ACTION_PLAY = "com.example.jarvisv2.ACTION_PLAY"
@@ -44,6 +48,11 @@ class JarvisMediaService : Service() {
     override fun onCreate() {
         super.onCreate()
         apiClient = JarvisApiClient(this)
+
+        // Initialize MediaSession
+        mediaSession = MediaSessionCompat(this, "JarvisMediaSession")
+        mediaSession.isActive = true // Tells the system this app is playing media
+
         // Start polling immediately upon creation
         startMediaPolling()
     }
@@ -108,8 +117,9 @@ class JarvisMediaService : Service() {
             this, 0, openAppIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
-        // The MediaStyle ensures proper layout for media controls and album art positioning
-        val mediaStyle = MediaStyle().setShowActionsInCompactView(0, 1, 2)
+        // 1. Configure MediaStyle with the Session Token (Critical for controls)
+        var mediaStyle = MediaStyle()
+            .setMediaSession(mediaSession.sessionToken)
 
         val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.mipmap.ic_launcher_round)
@@ -117,46 +127,51 @@ class JarvisMediaService : Service() {
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setStyle(mediaStyle) // Apply MediaStyle here
 
         if (mediaInfo != null && mediaInfo.title != "No Media") {
             builder.setContentTitle(mediaInfo.title)
             builder.setContentText(mediaInfo.artist)
 
+            // Update MediaSession active state
+            mediaSession.isActive = true
+
             if (mediaInfo.thumbnail != null) {
                 try {
                     val decodedString = Base64.decode(mediaInfo.thumbnail, Base64.DEFAULT)
                     val bitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
-
-                    // The Large Icon is the standard slot for album art in media notifications
                     builder.setLargeIcon(bitmap)
                 } catch (e: Exception) {
-                    // Log the error but continue building the notification
                     Log.e("MediaService", "Failed to decode/set thumbnail: ${e.message}")
-                    // FIX: Explicitly cast null to Bitmap? to resolve ambiguity (Line 137 in older versions)
                     builder.setLargeIcon(null as Bitmap?)
                 }
             } else {
-                // If there's no thumbnail, explicitly set null
-                // FIX: Explicitly cast null to Bitmap? to resolve ambiguity
                 builder.setLargeIcon(null as Bitmap?)
             }
 
+            // Add Actions (0: Prev, 1: Play/Pause, 2: Next)
             builder.addAction(generateAction(android.R.drawable.ic_media_previous, "Prev", ACTION_PREV))
+
             if (mediaInfo.is_playing) {
                 builder.addAction(generateAction(android.R.drawable.ic_media_pause, "Pause", ACTION_PAUSE))
             } else {
                 builder.addAction(generateAction(android.R.drawable.ic_media_play, "Play", ACTION_PLAY))
             }
+
             builder.addAction(generateAction(android.R.drawable.ic_media_next, "Next", ACTION_NEXT))
 
+            // 2. Enable Compact View (shows buttons in collapsed notification)
+            mediaStyle = mediaStyle.setShowActionsInCompactView(0, 1, 2)
+
         } else {
-            // No media case (Idle state)
+            // Idle state
             builder.setContentTitle("Jarvis Media")
             builder.setContentText("Connected to PC...")
-            // FIX: Explicitly cast null to Bitmap? to resolve ambiguity (Line 153 in older versions)
             builder.setLargeIcon(null as Bitmap?)
+            mediaSession.isActive = false
         }
+
+        // Apply the style after configuration
+        builder.setStyle(mediaStyle)
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -170,7 +185,6 @@ class JarvisMediaService : Service() {
     }
 
     private fun generateAction(icon: Int, title: String, actionStr: String): NotificationCompat.Action {
-        // Pointing to MediaActionReceiver
         val intent = Intent(this, MediaActionReceiver::class.java).apply { action = actionStr }
         val pendingIntent = PendingIntent.getBroadcast(this, actionStr.hashCode(), intent, PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Action.Builder(icon, title, pendingIntent).build()
@@ -186,6 +200,7 @@ class JarvisMediaService : Service() {
     }
 
     override fun onDestroy() {
+        mediaSession.release() // Important to prevent leaks
         super.onDestroy()
         serviceJob.cancel()
     }

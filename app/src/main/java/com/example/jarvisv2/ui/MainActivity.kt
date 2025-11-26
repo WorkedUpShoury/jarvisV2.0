@@ -46,9 +46,15 @@ class MainActivity : ComponentActivity() {
         MainViewModelFactory(application, this)
     }
 
-    private val audioPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) {
+    // UPDATED: Handle multiple permissions (Audio + Notifications)
+    private val permissionsLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
+            val notifGranted = permissions[Manifest.permission.POST_NOTIFICATIONS] ?: false
+
+            // Only toggle voice service if audio is granted.
+            // Notifications are optional but recommended.
+            if (audioGranted) {
                 toggleVoiceService()
             }
         }
@@ -72,15 +78,29 @@ class MainActivity : ComponentActivity() {
     // PERMISSIONS + VOICE SERVICE CONTROL
     // -------------------------------------------------------------
     private fun checkPermissionsAndToggleService() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val permission = Manifest.permission.RECORD_AUDIO
+        val permissionsToRequest = mutableListOf<String>()
 
-            if (ContextCompat.checkSelfPermission(this, permission)
+        // 1. Audio Permission (Android 6+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
                 != PackageManager.PERMISSION_GRANTED
             ) {
-                audioPermissionLauncher.launch(permission)
-                return
+                permissionsToRequest.add(Manifest.permission.RECORD_AUDIO)
             }
+        }
+
+        // 2. Notification Permission (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            permissionsLauncher.launch(permissionsToRequest.toTypedArray())
+            return
         }
 
         // Permission already granted

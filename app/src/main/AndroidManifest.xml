@@ -10,11 +10,14 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Required for Android 13+ Notifications -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Added for data sync foreground service type -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:name=".JarvisV2Application"
@@ -50,6 +53,12 @@
             android:name=".service.JarvisMediaService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- ADDED: The missing Notification Service -->
+        <service
+            android:name=".service.JarvisNotificationService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <receiver android:name=".service.MediaActionReceiver"
             android:exported="false">

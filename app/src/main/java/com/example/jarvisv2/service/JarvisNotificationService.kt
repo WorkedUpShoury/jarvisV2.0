@@ -21,6 +21,7 @@ class JarvisNotificationService : Service() {
     private lateinit var apiClient: JarvisApiClient
 
     private var lastEventId = 0
+    private var lastReminderId = 0 // Track the last reminder we notified about
 
     companion object {
         var serverUrl: String? = null
@@ -55,20 +56,25 @@ class JarvisNotificationService : Service() {
             while (isActive) {
                 val url = serverUrl
                 if (url != null) {
-                    // Poll events starting from the last ID we saw
+                    // --- 1. Poll General Events (Messages, etc) ---
                     apiClient.getEvents(url, lastEventId).onSuccess { response ->
-                        // 1. Update our ID tracker to the latest on the server
                         if (response.last_id > lastEventId) {
-
-                            // 2. Iterate through new events
                             for (event in response.events) {
-                                // "speak" type covers BOTH Agent replies and Reminders
+                                // "speak" type covers BOTH Agent replies and some Reminders
                                 if (event.type == "speak" && event.text.isNotEmpty()) {
                                     sendNotification(event.text)
                                 }
                             }
-
                             lastEventId = response.last_id
+                        }
+                    }
+
+                    // --- 2. Poll Specific Reminders Endpoint ---
+                    // This catches reminders that might not be in the event stream
+                    apiClient.getLatestReminderNotification(url).onSuccess { reminder ->
+                        if (reminder.id > lastReminderId) {
+                            sendNotification("Reminder: ${reminder.text}")
+                            lastReminderId = reminder.id
                         }
                     }
                 }

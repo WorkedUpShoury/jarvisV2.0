@@ -1,3 +1,4 @@
+// workedupshoury/jarvisv2.0/jarvisV2.0-aaa92dd1e8476ce67109495778760087eb2dcc1d/app/src/main/java/com/example/jarvisv2/viewmodel/MainViewModel.kt
 package com.example.jarvisv2.viewmodel
 
 import android.app.Application
@@ -12,7 +13,7 @@ import com.example.jarvisv2.data.allCommands
 import com.example.jarvisv2.network.JarvisApiClient
 import com.example.jarvisv2.network.MediaStateResponse
 import com.example.jarvisv2.service.JarvisMediaService
-import com.example.jarvisv2.service.JarvisNotificationService // <--- NEW IMPORT
+import com.example.jarvisv2.service.JarvisNotificationService
 import com.example.jarvisv2.service.JarvisVoiceService
 import com.example.jarvisv2.service.JarvisVoiceService.Companion.ServiceState
 import com.example.jarvisv2.service.VoiceListener
@@ -22,6 +23,9 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
 import android.os.Parcelable
+import com.example.jarvisv2.data.MediaSearch // <--- NEW IMPORT
+import com.example.jarvisv2.data.MediaSearchRepository // <--- NEW IMPORT
+import kotlinx.coroutines.Dispatchers
 
 class MainViewModel(
     private val app: Application,
@@ -29,7 +33,8 @@ class MainViewModel(
 ) : AndroidViewModel(app) {
 
     private val apiClient = JarvisApiClient(app.applicationContext)
-    private val repository: ChatRepository
+    private val chatRepository: ChatRepository
+    private val mediaSearchRepository: MediaSearchRepository // <--- NEW REPO
 
     // --- STATES ---
     private val _serverUrl = MutableStateFlow<String?>(null)
@@ -42,6 +47,11 @@ class MainViewModel(
     private val _brightnessLevel = MutableStateFlow(5f)
 
     val mediaState: StateFlow<MediaStateResponse?> = JarvisMediaService.sharedMediaState.asStateFlow()
+
+    // --- NEW MEDIA SEARCH FLOWS ---
+    val recentMediaSearches: StateFlow<List<MediaSearch>> // <--- NEW FLOW
+    val mostSearchedQuery: StateFlow<MediaSearch?> // <--- NEW FLOW
+
 
     private var consecutiveFailures = 0
     private var discoveryJob: Job? = null
@@ -67,9 +77,14 @@ class MainViewModel(
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     init {
-        val chatDao = AppDatabase.getDatabase(app).chatDao()
-        repository = ChatRepository(chatDao)
-        chatHistory = repository.allMessages.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+        val database = AppDatabase.getDatabase(app) // Get the single database instance
+        chatRepository = ChatRepository(database.chatDao())
+        mediaSearchRepository = MediaSearchRepository(database.mediaSearchDao()) // <--- NEW REPO INSTANTIATION
+
+        chatHistory = chatRepository.allMessages.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+        recentMediaSearches = mediaSearchRepository.recentSearches.stateIn(viewModelScope, SharingStarted.Lazily, emptyList()) // <--- NEW FLOW COLLECTION
+        mostSearchedQuery = mediaSearchRepository.mostSearchedQuery.stateIn(viewModelScope, SharingStarted.Lazily, null) // <--- NEW FLOW COLLECTION
+
 
         startServerDiscovery()
         observeVoiceServiceCommands()
@@ -122,7 +137,7 @@ class MainViewModel(
             serverUrl.collect { url ->
                 if (url != null) {
                     // FIX: Clear local DB on new connection to prevent duplicates
-                    repository.clearAll()
+                    chatRepository.clearAll()
 
                     var processedCount = 0
 
@@ -136,7 +151,7 @@ class MainViewModel(
                                     if (history.size < processedCount) {
                                         processedCount = 0
                                         // Optional: Clear again if server history was wiped
-                                        repository.clearAll()
+                                        chatRepository.clearAll()
                                     }
 
                                     // Process NEW items
@@ -148,7 +163,7 @@ class MainViewModel(
                                             val message = item.parts.text
 
                                             // Insert into local DB for display
-                                            repository.insert(ChatMessage(message = message, sender = sender))
+                                            chatRepository.insert(ChatMessage(message = message, sender = sender))
                                         }
                                         processedCount = history.size
                                     }
@@ -198,7 +213,7 @@ class MainViewModel(
         if (url == null) {
             // If disconnected, show local error
             viewModelScope.launch {
-                repository.insert(ChatMessage(message = "Error: Server not found.", sender = ChatSender.System))
+                chatRepository.insert(ChatMessage(message = "Error: Server not found.", sender = ChatSender.System))
             }
             startServerDiscovery()
             return
@@ -256,8 +271,36 @@ class MainViewModel(
             .launchIn(viewModelScope)
     }
 
-    fun clearChatHistory() = viewModelScope.launch { repository.clearAll() }
-    fun deleteChatMessage(message: ChatMessage) = viewModelScope.launch { repository.delete(message) }
+    fun clearChatHistory() = viewModelScope.launch { chatRepository.clearAll() }
+    fun deleteChatMessage(message: ChatMessage) = viewModelScope.launch { chatRepository.delete(message) }
+
+    // --- NEW FUNCTIONS FOR MEDIA SCREEN LOGIC ---
+
+    fun saveMediaSearch(query: String, source: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            // Retrieve current searches to find an existing entry and increment count
+            // Note: In a real app, this read-then-write logic would be a single atomic database transaction.
+            val currentSearches = mediaSearchRepository.recentSearches.first()
+            val existing = currentSearches.find { it.query.lowercase() == query.lowercase() }
+
+            val newSearch = if (existing != null) {
+                existing.copy(
+                    count = existing.count + 1,
+                    lastUsed = System.currentTimeMillis(),
+                    source = source
+                )
+            } else {
+                MediaSearch(query = query, source = source, count = 1, lastUsed = System.currentTimeMillis())
+            }
+
+            mediaSearchRepository.getDao().insertOrUpdate(newSearch)
+        }
+    }
+
+    fun playMediaSearch(query: String, source: String) {
+        val command = if (source == "spotify") "play $query on spotify" else "play $query"
+        sendButtonCommand(command)
+    }
 }
 
 sealed class CommandStatus {

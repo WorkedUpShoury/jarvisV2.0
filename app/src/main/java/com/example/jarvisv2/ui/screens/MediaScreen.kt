@@ -1,12 +1,16 @@
+// workedupshoury/jarvisv2.0/jarvisV2.0-aaa92dd1e8476ce67109495778760087eb2dcc1d/app/src/main/java/com/example/jarvisv2/ui/screens/MediaScreen.kt
 package com.example.jarvisv2.ui.screens
 
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable // <--- NEW IMPORT
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn // <--- CHANGED FROM GRID TO COLUMN for outer layout
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -18,6 +22,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.filled.Star // <--- NEW ICON IMPORT
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,10 +32,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.font.FontWeight // <--- NEW IMPORT
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.jarvisv2.network.MediaStateResponse
+import com.example.jarvisv2.data.MediaSearch // <--- NEW IMPORT
 import com.example.jarvisv2.ui.theme.DarkPrimary
+import com.example.jarvisv2.ui.theme.DarkOnSurface
 import com.example.jarvisv2.ui.theme.DarkSurface
 import com.example.jarvisv2.viewmodel.MainViewModel
 
@@ -43,53 +52,67 @@ fun MediaScreen(viewModel: MainViewModel) {
     if (showTrackpad) TrackpadDialog(viewModel) { showTrackpad = false }
     if (showKeyboard) KeyboardDialog(viewModel) { showKeyboard = false }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    // Use LazyColumn for the main screen layout to allow scrolling all sections
+    LazyColumn(
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(bottom = 100.dp) // Extra padding for navbar
+    ) {
         // 1. Now Playing Card
-        if (mediaState != null) {
-            NowPlayingCard(
-                state = mediaState!!,
-                onPlayPause = {
-                    val cmd = if (mediaState!!.is_playing) "pause playback" else "resume playback"
-                    viewModel.sendButtonCommand(cmd)
-                },
-                onNext = { viewModel.sendButtonCommand("next track") },
-                onPrev = { viewModel.sendButtonCommand("previous track") }
-            )
+        item {
+            if (mediaState != null) {
+                NowPlayingCard(
+                    state = mediaState!!,
+                    onPlayPause = {
+                        val cmd = if (mediaState!!.is_playing) "pause playback" else "resume playback"
+                        viewModel.sendButtonCommand(cmd)
+                    },
+                    onNext = { viewModel.sendButtonCommand("next track") },
+                    onPrev = { viewModel.sendButtonCommand("previous track") }
+                )
+            }
         }
 
         // 2. Search Input
-        MediaSearchInput(viewModel)
+        item {
+            MediaSearchInput(viewModel)
+        }
 
-        // 3. Control Grid
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 100.dp),
-            contentPadding = PaddingValues(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            item {
-                ActionButton(
-                    icon = Icons.Default.Mouse,
-                    text = "Trackpad",
-                    containerColor = DarkSurface,
-                    onClick = { showTrackpad = true }
-                )
+        // 3. Search History (New Content)
+        item {
+            MediaSearchHistory(viewModel = viewModel)
+        }
+
+        // 4. Control Grid (Only Trackpad/Keyboard remain)
+        item {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2), // Changed to fixed 2 columns as only 2 items remain
+                contentPadding = PaddingValues(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.heightIn(max = 200.dp) // Limit height of the grid
+            ) {
+                item {
+                    ActionButton(
+                        icon = Icons.Default.Mouse,
+                        text = "Trackpad",
+                        containerColor = DarkSurface,
+                        onClick = { showTrackpad = true }
+                    )
+                }
+                item {
+                    ActionButton(
+                        icon = Icons.Default.Keyboard,
+                        text = "Keyboard",
+                        containerColor = DarkSurface,
+                        onClick = { showKeyboard = true }
+                    )
+                }
+                // REMOVED: Playback control buttons (Prev, Play, Pause, Next)
             }
-            item {
-                ActionButton(
-                    icon = Icons.Default.Keyboard,
-                    text = "Keyboard",
-                    containerColor = DarkSurface,
-                    onClick = { showKeyboard = true }
-                )
-            }
-            item { ActionButton(icon = Icons.Default.SkipPrevious, text = "Prev", viewModel = viewModel, command = "previous track") }
-            item { ActionButton(icon = Icons.Default.PlayArrow, text = "Play", viewModel = viewModel, command = "resume playback") }
-            item { ActionButton(icon = Icons.Default.Pause, text = "Pause", viewModel = viewModel, command = "pause playback") }
-            item { ActionButton(icon = Icons.Default.SkipNext, text = "Next", viewModel = viewModel, command = "next track") }
         }
     }
 }
+
 
 @Composable
 fun NowPlayingCard(
@@ -197,8 +220,10 @@ fun MediaSearchInput(viewModel: MainViewModel) {
                 IconButton(onClick = {
                     val query = text.trim()
                     if (query.isNotEmpty()) {
-                        val command = if (selectedSource == "spotify") "play $query on spotify" else "play $query"
-                        viewModel.sendButtonCommand(command)
+                        // 1. Save the search
+                        viewModel.saveMediaSearch(query, selectedSource) // <--- NEW SAVE CALL
+                        // 2. Play it
+                        viewModel.playMediaSearch(query, selectedSource)
                         text = ""
                         focusManager.clearFocus()
                     }
@@ -211,5 +236,126 @@ fun MediaSearchInput(viewModel: MainViewModel) {
             ),
             singleLine = true
         )
+    }
+}
+
+// --- NEW COMPOSABLE FOR SEARCH HISTORY ---
+@Composable
+fun MediaSearchHistory(viewModel: MainViewModel) {
+    val mostSearched by viewModel.mostSearchedQuery.collectAsState()
+    val recentSearches by viewModel.recentMediaSearches.collectAsState()
+
+    // Filter out the most searched item from the recent list to avoid duplication
+    val filteredRecent = remember(recentSearches, mostSearched) {
+        // Filter out if query and source match
+        recentSearches.filter { search ->
+            mostSearched == null || search.query != mostSearched!!.query || search.source != mostSearched!!.source
+        }
+    }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+
+        // Most Searched Query (Top)
+        if (mostSearched != null) {
+            Text(
+                "Most Searched",
+                style = MaterialTheme.typography.titleSmall,
+                color = DarkPrimary,
+                fontWeight = FontWeight.SemiBold
+            )
+            SearchItemCard(search = mostSearched!!, isMostSearched = true) {
+                // Clicking plays the item
+                viewModel.playMediaSearch(mostSearched!!.query, mostSearched!!.source)
+                viewModel.saveMediaSearch(mostSearched!!.query, mostSearched!!.source) // Log the re-play as a search
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Recent Searches List (Below)
+        if (filteredRecent.isNotEmpty()) {
+            Text(
+                "Recent Searches",
+                style = MaterialTheme.typography.titleSmall,
+                color = DarkOnSurface,
+                fontWeight = FontWeight.SemiBold
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                filteredRecent.forEach { search ->
+                    SearchItemCard(search = search, isMostSearched = false) {
+                        // Clicking plays the item
+                        viewModel.playMediaSearch(search.query, search.source)
+                        viewModel.saveMediaSearch(search.query, search.source) // Log the re-play as a search
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Helper Composable for the clickable search item
+@Composable
+fun SearchItemCard(search: MediaSearch, isMostSearched: Boolean, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF262626) // A slightly different dark surface
+        ),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                if (isMostSearched) {
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = "Most Searched",
+                        tint = Color(0xFFFFCC00),
+                        modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Play Icon",
+                        tint = DarkPrimary,
+                        modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                    )
+                }
+
+                Column(modifier = Modifier.padding(end = 8.dp)) {
+                    Text(
+                        text = search.query,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "Source: ${search.source.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }}",
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
+            // Show the count badge if not null
+            if (search.count > 0) {
+                Badge(
+                    containerColor = DarkPrimary,
+                    contentColor = Color.White,
+                    modifier = Modifier.align(Alignment.CenterVertically)
+                ) {
+                    Text(text = search.count.toString(), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }

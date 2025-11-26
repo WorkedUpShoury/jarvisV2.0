@@ -62,7 +62,10 @@ class JarvisNotificationService : Service() {
                             for (event in response.events) {
                                 // "speak" type covers BOTH Agent replies and some Reminders
                                 if (event.type == "speak" && event.text.isNotEmpty()) {
-                                    sendNotification(event.text)
+                                    // FIX: Only notify if the event happened recently (e.g. last 60s)
+                                    if (isEventRecent(event.ts)) {
+                                        sendNotification(event.text)
+                                    }
                                 }
                             }
                             lastEventId = response.last_id
@@ -73,7 +76,10 @@ class JarvisNotificationService : Service() {
                     // This catches reminders that might not be in the event stream
                     apiClient.getLatestReminderNotification(url).onSuccess { reminder ->
                         if (reminder.id > lastReminderId) {
-                            sendNotification("Reminder: ${reminder.text}")
+                            // FIX: Only notify if the reminder timestamp is recent
+                            if (isEventRecent(reminder.ts)) {
+                                sendNotification("Reminder: ${reminder.text}")
+                            }
                             lastReminderId = reminder.id
                         }
                     }
@@ -81,6 +87,27 @@ class JarvisNotificationService : Service() {
                 delay(2000) // Poll every 2 seconds
             }
         }
+    }
+
+    /**
+     * Helper to determine if an event/reminder happened recently (within last 60 seconds).
+     * This prevents flooding notifications when the app restarts and pulls old history.
+     */
+    private fun isEventRecent(ts: Double): Boolean {
+        val now = System.currentTimeMillis()
+
+        // Heuristic: Check if 'ts' is Seconds or Milliseconds.
+        // Current seconds ~1.7 billion (10 digits). Current millis ~1.7 trillion (13 digits).
+        // If ts is small (< 100 billion), it's likely Seconds.
+        val eventTimeMillis = if (ts < 100_000_000_000) {
+            (ts * 1000).toLong()
+        } else {
+            ts.toLong()
+        }
+
+        val diff = now - eventTimeMillis
+        // Return true only if the event is less than 60 seconds old
+        return diff < 60_000
     }
 
     private fun sendNotification(message: String) {

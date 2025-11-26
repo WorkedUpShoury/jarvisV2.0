@@ -1,9 +1,7 @@
 package com.example.jarvisv2.viewmodel
 
 import android.app.Application
-import android.content.Context
 import android.content.Intent
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
@@ -12,13 +10,12 @@ import com.example.jarvisv2.data.ChatMessage
 import com.example.jarvisv2.data.ChatRepository
 import com.example.jarvisv2.data.allCommands
 import com.example.jarvisv2.network.JarvisApiClient
-import com.example.jarvisv2.network.JarvisCommandResponse
 import com.example.jarvisv2.network.MediaStateResponse
 import com.example.jarvisv2.service.JarvisMediaService
+import com.example.jarvisv2.service.JarvisNotificationService // <--- NEW IMPORT
 import com.example.jarvisv2.service.JarvisVoiceService
 import com.example.jarvisv2.service.JarvisVoiceService.Companion.ServiceState
 import com.example.jarvisv2.service.VoiceListener
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -75,10 +72,8 @@ class MainViewModel(
         chatHistory = repository.allMessages.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
         startServerDiscovery()
-        // No separate voice command observer needed for history now, polling handles it
-        // However, we keep it to send commands
         observeVoiceServiceCommands()
-        startHistoryPolling() // <--- NEW HISTORY METHOD
+        startHistoryPolling()
     }
 
     private fun startServerDiscovery() {
@@ -98,7 +93,7 @@ class MainViewModel(
                     _isDiscovering.value = false
                     consecutiveFailures = 0
 
-                    // Sync Media Service
+                    // 1. Start Media Service
                     JarvisMediaService.serverUrl = url
                     val mediaIntent = Intent(app.applicationContext, JarvisMediaService::class.java)
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -107,16 +102,28 @@ class MainViewModel(
                         app.applicationContext.startService(mediaIntent)
                     }
 
+                    // 2. Start Notification Service (NEW)
+                    JarvisNotificationService.serverUrl = url
+                    val notifIntent = Intent(app.applicationContext, JarvisNotificationService::class.java)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        app.applicationContext.startForegroundService(notifIntent)
+                    } else {
+                        app.applicationContext.startService(notifIntent)
+                    }
+
                     fetchSystemLevels()
                 }
         }
     }
 
-    // --- NEW: HISTORY POLLING (Source of Truth) ---
+    // --- HISTORY POLLING (Source of Truth) ---
     private fun startHistoryPolling() {
         viewModelScope.launch {
             serverUrl.collect { url ->
                 if (url != null) {
+                    // FIX: Clear local DB on new connection to prevent duplicates
+                    repository.clearAll()
+
                     var processedCount = 0
 
                     while (true) {
@@ -128,6 +135,8 @@ class MainViewModel(
                                     // If history on server shrunk (e.g. file cleared), reset local counter
                                     if (history.size < processedCount) {
                                         processedCount = 0
+                                        // Optional: Clear again if server history was wiped
+                                        repository.clearAll()
                                     }
 
                                     // Process NEW items
@@ -246,9 +255,6 @@ class MainViewModel(
             }
             .launchIn(viewModelScope)
     }
-
-    // Removed manual addChatMessage (except for errors) since history poller handles it
-    // But we keep it private for internal error reporting if needed
 
     fun clearChatHistory() = viewModelScope.launch { repository.clearAll() }
     fun deleteChatMessage(message: ChatMessage) = viewModelScope.launch { repository.delete(message) }

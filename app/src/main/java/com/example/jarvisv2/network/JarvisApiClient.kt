@@ -42,38 +42,40 @@ data class JarvisEvent(val id: Int, val ts: Double, val type: String, val text: 
 @Serializable
 data class JarvisEventResponse(val events: List<JarvisEvent>, val last_id: Int)
 
-// --- NEW HISTORY DATA CLASSES ---
 @Serializable
-data class HistoryItem(
-    val type: String,
-    val role: String,
-    val parts: HistoryParts
-)
+data class HistoryItem(val type: String, val role: String, val parts: HistoryParts)
 
 @Serializable
-data class HistoryParts(
-    val text: String
-)
+data class HistoryParts(val text: String)
 
 @Serializable
 data class SystemLevelsResponse(val volume: Int, val brightness: Int)
 
 @Serializable
-data class MediaStateResponse(
-    val title: String,
-    val artist: String,
-    val is_playing: Boolean,
-    val thumbnail: String?
+data class MediaStateResponse(val title: String, val artist: String, val is_playing: Boolean, val thumbnail: String?)
+
+// --- NEW REMINDER MODELS ---
+@Serializable
+data class TaskListResponse(val tasks: List<JarvisTask>)
+
+@Serializable
+data class JarvisTask(
+    val id: String,
+    val kind: String,
+    val due: String,
+    val payload: TaskPayload,
+    val done: Boolean
 )
+
+@Serializable
+data class TaskPayload(val text: String)
 
 class JarvisApiClient(private val context: Context) {
 
     private val client = HttpClient(Android) {
         expectSuccess = false
         install(ContentNegotiation) {
-            json(kotlinx.serialization.json.Json {
-                ignoreUnknownKeys = true // Handle optional fields gracefully
-            })
+            json(kotlinx.serialization.json.Json { ignoreUnknownKeys = true })
         }
         install(Logging) {
             level = LogLevel.ALL
@@ -97,11 +99,34 @@ class JarvisApiClient(private val context: Context) {
         }
     }
 
-    // --- NEW: Fetch Full Chat History ---
     suspend fun getChatHistory(serverUrl: String): Result<List<HistoryItem>> {
         return withContext(Dispatchers.IO) {
             try {
                 val response: List<HistoryItem> = client.get("$serverUrl/api/history") {
+                    url { parameters.append("token", apiToken) }
+                }.body()
+                Result.success(response)
+            } catch (e: Exception) { Result.failure(e) }
+        }
+    }
+
+    // --- NEW: Events Stream (Best for Notifications) ---
+    suspend fun getEvents(serverUrl: String, since: Int): Result<JarvisEventResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response: JarvisEventResponse = client.get("$serverUrl/events") {
+                    url { parameters.append("since", since.toString()) }
+                }.body()
+                Result.success(response)
+            } catch (e: Exception) { Result.failure(e) }
+        }
+    }
+
+    // --- NEW: Reminders List (As Requested) ---
+    suspend fun getReminders(serverUrl: String): Result<TaskListResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response: TaskListResponse = client.get("$serverUrl/api/reminders") {
                     url { parameters.append("token", apiToken) }
                 }.body()
                 Result.success(response)
@@ -143,7 +168,6 @@ class JarvisApiClient(private val context: Context) {
             val hostAddress = getLocalIpAddress(wifiManager)
             if (hostAddress == null) { close(IllegalStateException("Wifi is off.")); return@callbackFlow }
 
-            Log.d("JarvisApiClient", "Starting jmDNS on $hostAddress")
             val inetAddress = InetAddress.getByName(hostAddress)
             jmdns = JmDNS.create(inetAddress, "JarvisClient")
 
@@ -182,17 +206,6 @@ class JarvisApiClient(private val context: Context) {
                 val response: JarvisCommandResponse = client.post("$serverUrl/command") {
                     contentType(ContentType.Application.Json)
                     setBody(requestBody)
-                }.body()
-                Result.success(response)
-            } catch (e: Exception) { Result.failure(e) }
-        }
-    }
-
-    suspend fun getEvents(serverUrl: String, since: Int): Result<JarvisEventResponse> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val response: JarvisEventResponse = client.get("$serverUrl/events") {
-                    url { parameters.append("since", since.toString()) }
                 }.body()
                 Result.success(response)
             } catch (e: Exception) { Result.failure(e) }

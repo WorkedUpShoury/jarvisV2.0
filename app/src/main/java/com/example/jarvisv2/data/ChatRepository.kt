@@ -9,11 +9,10 @@ class ChatRepository(private val chatDao: ChatDao) {
         chatDao.insertMessage(message)
     }
 
+    // Kept for initial synchronization/clearing the local cache on connect/server-side delete
     suspend fun clearAll() {
         chatDao.clearAllMessages()
     }
 
-    suspend fun delete(message: ChatMessage) {
-        chatDao.deleteMessage(message)
-    }
+    // Removed: suspend fun delete(message: ChatMessage)
 }

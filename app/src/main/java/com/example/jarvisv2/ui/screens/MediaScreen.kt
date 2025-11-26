@@ -1,16 +1,12 @@
-// workedupshoury/jarvisv2.0/jarvisV2.0-aaa92dd1e8476ce67109495778760087eb2dcc1d/app/src/main/java/com/example/jarvisv2/ui/screens/MediaScreen.kt
 package com.example.jarvisv2.ui.screens
 
 import android.graphics.BitmapFactory
 import android.util.Base64
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable // <--- NEW IMPORT
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn // <--- CHANGED FROM GRID TO COLUMN for outer layout
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,7 +16,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material.icons.filled.Star // <--- NEW ICON IMPORT
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,12 +26,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.font.FontWeight // <--- NEW IMPORT
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.jarvisv2.network.MediaStateResponse
-import com.example.jarvisv2.data.MediaSearch // <--- NEW IMPORT
+import com.example.jarvisv2.data.MediaSearch
 import com.example.jarvisv2.ui.theme.DarkPrimary
 import com.example.jarvisv2.ui.theme.DarkOnSurface
 import com.example.jarvisv2.ui.theme.DarkSurface
@@ -207,11 +203,14 @@ fun MediaSearchInput(viewModel: MainViewModel) {
     }
 }
 
-// --- NEW COMPOSABLE FOR SEARCH HISTORY ---
+// --- MODIFIED COMPOSABLE FOR SEARCH HISTORY ---
 @Composable
 fun MediaSearchHistory(viewModel: MainViewModel) {
     val mostSearched by viewModel.mostSearchedQuery.collectAsState()
     val recentSearches by viewModel.recentMediaSearches.collectAsState()
+
+    // State for Dialog
+    var showClearAllDialog by remember { mutableStateOf(false) }
 
     // Filter out the most searched item from the recent list to avoid duplication
     val filteredRecent = remember(recentSearches, mostSearched) {
@@ -221,7 +220,59 @@ fun MediaSearchHistory(viewModel: MainViewModel) {
         }
     }
 
+    // --- Clear All Confirmation Dialog ---
+    if (showClearAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearAllDialog = false },
+            title = { Text("Clear Search History?", color = DarkOnSurface) },
+            text = { Text("This will delete all saved media searches.", color = DarkOnSurface) },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.clearMediaSearchHistory() // <--- CALL TO NEW VM FUNCTION
+                    showClearAllDialog = false
+                }) {
+                    Text("Clear All", color = Color.Red)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAllDialog = false }) {
+                    Text("Cancel", color = DarkOnSurface)
+                }
+            },
+            containerColor = DarkSurface,
+            titleContentColor = DarkOnSurface,
+            textContentColor = DarkOnSurface
+        )
+    }
+
+
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+
+        // --- Header Row with Clear Button ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "Search History",
+                style = MaterialTheme.typography.titleMedium,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            // Clear Button (Only show if there is history)
+            if (mostSearched != null || filteredRecent.isNotEmpty()) {
+                TextButton(
+                    onClick = { showClearAllDialog = true },
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Text("Clear All", color = Color.Red, fontSize = 12.sp)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
 
         // Most Searched Query (Top)
         if (mostSearched != null) {

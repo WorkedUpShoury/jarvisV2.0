@@ -27,7 +27,8 @@ import com.example.jarvisv2.viewmodel.MainViewModel
 @Composable
 fun KeyboardDialog(
     viewModel: MainViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onSwitchToTrackpad: () -> Unit // <--- NEW CALLBACK
 ) {
     var textInput by remember { mutableStateOf("") }
 
@@ -37,7 +38,7 @@ fun KeyboardDialog(
                 .fillMaxWidth()
                 .wrapContentHeight(),
             shape = RoundedCornerShape(24.dp),
-            color = DarkSurface, // App Theme Surface
+            color = DarkSurface,
             tonalElevation = 8.dp
         ) {
             Column(
@@ -59,12 +60,24 @@ fun KeyboardDialog(
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 20.sp
                     )
-                    IconButton(onClick = onDismiss) {
-                        Icon(Icons.Default.Close, "Close", tint = DarkOnSurface)
+
+                    Row {
+                        // Switch to Trackpad Button
+                        IconButton(onClick = onSwitchToTrackpad) {
+                            Icon(
+                                imageVector = Icons.Default.Mouse,
+                                contentDescription = "Switch to Trackpad",
+                                tint = DarkPrimary
+                            )
+                        }
+
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, "Close", tint = DarkOnSurface)
+                        }
                     }
                 }
 
-                // --- 2. Input Field (Matches GameScreen Touchpad Style) ---
+                // --- 2. Input Field ---
                 OutlinedTextField(
                     value = textInput,
                     onValueChange = { textInput = it },
@@ -76,13 +89,13 @@ fun KeyboardDialog(
                         focusedContainerColor = Color.Black.copy(alpha = 0.5f),
                         unfocusedContainerColor = Color.Black.copy(alpha = 0.5f),
                         focusedBorderColor = DarkPrimary,
-                        unfocusedBorderColor = Color.Transparent, // Clean look
+                        unfocusedBorderColor = Color.Transparent,
                         cursorColor = DarkPrimary,
                         focusedTextColor = Color.White,
                         unfocusedTextColor = Color.White
                     ),
                     trailingIcon = {
-                        // Send Button (Solid Primary)
+                        // Send Button
                         FilledIconButton(
                             onClick = {
                                 if (textInput.isNotEmpty()) {
@@ -113,7 +126,6 @@ fun KeyboardDialog(
                     KeyButton(text = "Esc", modifier = Modifier.weight(1f)) { viewModel.sendUdpCommand("tap|esc") }
                     KeyButton(text = "Tab", modifier = Modifier.weight(1f)) { viewModel.sendUdpCommand("tap|tab") }
                     KeyButton(text = "Caps", modifier = Modifier.weight(1f)) { viewModel.sendUdpCommand("tap|capslock") }
-                    // Backspace gets a subtle red tint
                     KeyButton(
                         icon = Icons.AutoMirrored.Filled.Backspace,
                         modifier = Modifier.weight(1f),
@@ -151,7 +163,6 @@ fun KeyboardDialog(
                         modifier = Modifier.weight(2f).height(56.dp)
                     ) { viewModel.sendUdpCommand("tap|space") }
 
-                    // Enter Button (Solid Primary)
                     Button(
                         onClick = { viewModel.sendUdpCommand("tap|enter") },
                         modifier = Modifier.weight(1f).height(56.dp),
@@ -179,19 +190,16 @@ fun KeyButton(
     isDestructive: Boolean = false,
     onClick: () -> Unit
 ) {
-    // Logic: Standard keys look like the "Suggestion Chips" (Black/Surface with Primary Border)
-    // Destructive keys look like "Error" states.
-
     val containerColor = if (isDestructive) {
         DarkError.copy(alpha = 0.15f)
     } else {
-        DarkSurface // Matches app background style
+        DarkSurface
     }
 
     val borderColor = if (isDestructive) {
         DarkError.copy(alpha = 0.5f)
     } else {
-        DarkPrimary.copy(alpha = 0.3f) // Subtle blue border
+        DarkPrimary.copy(alpha = 0.3f)
     }
 
     val contentColor = if (isDestructive) {

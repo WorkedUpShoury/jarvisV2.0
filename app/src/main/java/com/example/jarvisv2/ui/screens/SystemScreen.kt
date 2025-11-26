@@ -53,8 +53,8 @@ fun SystemScreen(viewModel: MainViewModel) {
 
     // Note/Keyboard/Trackpad States
     var showNotesDialog by remember { mutableStateOf(false) }
-    var showTrackpad by remember { mutableStateOf(false) } // <-- NEW STATE
-    var showKeyboard by remember { mutableStateOf(false) } // <-- NEW STATE
+    var showTrackpad by remember { mutableStateOf(false) }
+    var showKeyboard by remember { mutableStateOf(false) }
 
     // Trigger refresh when screen opens
     LaunchedEffect(Unit) {
@@ -65,8 +65,29 @@ fun SystemScreen(viewModel: MainViewModel) {
     if (showNotesDialog) {
         NotesDialog(viewModel = viewModel) { showNotesDialog = false }
     }
-    if (showTrackpad) TrackpadDialog(viewModel) { showTrackpad = false } // <-- NEW CALL
-    if (showKeyboard) KeyboardDialog(viewModel) { showKeyboard = false } // <-- NEW CALL
+
+    // --- UPDATED DIALOG LOGIC ---
+    if (showTrackpad) {
+        TrackpadDialog(
+            viewModel = viewModel,
+            onDismiss = { showTrackpad = false },
+            onSwitchToKeyboard = {
+                showTrackpad = false
+                showKeyboard = true
+            }
+        )
+    }
+
+    if (showKeyboard) {
+        KeyboardDialog(
+            viewModel = viewModel,
+            onDismiss = { showKeyboard = false },
+            onSwitchToTrackpad = {
+                showKeyboard = false
+                showTrackpad = true
+            }
+        )
+    }
 
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -80,7 +101,6 @@ fun SystemScreen(viewModel: MainViewModel) {
             modifier = Modifier.fillMaxWidth().wrapContentHeight()
         ) {
             items(maintenanceActions) { action ->
-                // Note: The Notes button logic is now handled in AppsScreen.kt as per the previous request.
                 ActionButton(
                     modifier = Modifier.fillMaxHeight(),
                     icon = action.icon!!,
@@ -98,8 +118,8 @@ fun SystemScreen(viewModel: MainViewModel) {
         // --- Window Actions (Minimize, Fullscreen, Close) ---
         WindowActionsCard(viewModel = viewModel)
 
-        // --- NEW: Trackpad/Keyboard Controls Card ---
-        MouseKeyboardControlCard( // <-- NEW CARD PLACED HERE
+        // --- Mouse/Keyboard Controls Card ---
+        MouseKeyboardControlCard(
             onShowTrackpad = { showTrackpad = true },
             onShowKeyboard = { showKeyboard = true }
         )
@@ -130,7 +150,6 @@ fun SystemScreen(viewModel: MainViewModel) {
     }
 }
 
-// --- NEW COMPOSABLE: MouseKeyboardControlCard ---
 @Composable
 private fun MouseKeyboardControlCard(
     onShowTrackpad: () -> Unit,
@@ -198,7 +217,6 @@ private fun MouseKeyboardControlCard(
         }
     }
 }
-
 
 @Composable
 private fun WindowActionsCard(viewModel: MainViewModel) {

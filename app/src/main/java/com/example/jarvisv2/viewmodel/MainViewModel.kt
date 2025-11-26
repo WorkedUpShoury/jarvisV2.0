@@ -1,4 +1,3 @@
-// workedupshoury/jarvisv2.0/jarvisV2.0-aaa92dd1e8476ce67109495778760087eb2dcc1d/app/src/main/java/com/example/jarvisv2/viewmodel/MainViewModel.kt
 package com.example.jarvisv2.viewmodel
 
 import android.app.Application
@@ -26,6 +25,7 @@ import android.os.Parcelable
 import com.example.jarvisv2.data.MediaSearch // <--- NEW IMPORT
 import com.example.jarvisv2.data.MediaSearchRepository // <--- NEW IMPORT
 import kotlinx.coroutines.Dispatchers
+import java.security.MessageDigest // <--- NEW IMPORT for hashing
 
 class MainViewModel(
     private val app: Application,
@@ -271,10 +271,30 @@ class MainViewModel(
             .launchIn(viewModelScope)
     }
 
-    fun clearChatHistory() = viewModelScope.launch { chatRepository.clearAll() }
-    fun deleteChatMessage(message: ChatMessage) = viewModelScope.launch { chatRepository.delete(message) }
+    // --- CHAT DELETION LOGIC (Updated to use Server Commands) ---
 
-    // --- NEW FUNCTIONS FOR MEDIA SCREEN LOGIC ---
+    /**
+     * Generates a stable hash of the message content and sends a command to the server
+     * to delete the matching entry in the JSON file.
+     */
+    fun sendChatDeleteCommand(messageText: String) {
+        val hash = generateStableHash(messageText)
+        val command = "delete chat message $hash"
+        sendButtonCommand(command)
+    }
+
+    /**
+     * Generates a stable 8-character SHA-256 hash of a string.
+     */
+    private fun generateStableHash(input: String): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val hashBytes = digest.digest(input.toByteArray(Charsets.UTF_8))
+        // Truncate and convert to hex string
+        return hashBytes.slice(0..3).joinToString("") { "%02x".format(it) }
+        // This gives a stable 8-char hash (4 bytes)
+    }
+
+    // --- MEDIA SEARCH LOGIC ---
 
     fun saveMediaSearch(query: String, source: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -300,6 +320,15 @@ class MainViewModel(
     fun playMediaSearch(query: String, source: String) {
         val command = if (source == "spotify") "play $query on spotify" else "play $query"
         sendButtonCommand(command)
+    }
+
+    /**
+     * Clears all saved media search entries from the local database.
+     */
+    fun clearMediaSearchHistory() {
+        viewModelScope.launch(Dispatchers.IO) {
+            mediaSearchRepository.clearAll()
+        }
     }
 }
 

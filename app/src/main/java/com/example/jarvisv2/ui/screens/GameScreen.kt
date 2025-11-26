@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
@@ -30,14 +31,15 @@ import kotlin.math.roundToInt
 @Composable
 fun TrackpadDialog(
     viewModel: MainViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onSwitchToKeyboard: () -> Unit // <--- NEW CALLBACK
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(600.dp),
-            shape = RoundedCornerShape(24.dp), // Consistent with Keyboard
+            shape = RoundedCornerShape(24.dp),
             color = DarkSurface,
             tonalElevation = 8.dp
         ) {
@@ -60,12 +62,24 @@ fun TrackpadDialog(
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 20.sp
                     )
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close",
-                            tint = DarkOnSurface
-                        )
+
+                    Row {
+                        // Switch to Keyboard Button
+                        IconButton(onClick = onSwitchToKeyboard) {
+                            Icon(
+                                imageVector = Icons.Default.Keyboard,
+                                contentDescription = "Switch to Keyboard",
+                                tint = DarkPrimary
+                            )
+                        }
+
+                        IconButton(onClick = onDismiss) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close",
+                                tint = DarkOnSurface
+                            )
+                        }
                     }
                 }
 
@@ -75,7 +89,7 @@ fun TrackpadDialog(
                         .weight(1f)
                         .fillMaxWidth()
                         .background(
-                            color = Color.Black.copy(alpha = 0.5f), // Matches Keyboard Input Field
+                            color = Color.Black.copy(alpha = 0.5f),
                             shape = RoundedCornerShape(16.dp)
                         )
                         // Clicks
@@ -114,7 +128,7 @@ fun TrackpadDialog(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // --- Scroll Controls (Matches KeyButton Style) ---
+                // --- Scroll Controls ---
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -147,9 +161,9 @@ fun ScrollButton(
 ) {
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.height(56.dp), // Matches KeyButton height
+        modifier = modifier.height(56.dp),
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, DarkPrimary.copy(alpha = 0.3f)), // Matches KeyButton border
+        border = BorderStroke(1.dp, DarkPrimary.copy(alpha = 0.3f)),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = DarkSurface,
             contentColor = DarkPrimary

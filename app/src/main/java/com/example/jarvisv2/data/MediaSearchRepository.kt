@@ -9,4 +9,9 @@ class MediaSearchRepository(private val mediaSearchDao: MediaSearchDao) {
 
     // Exposed directly for ViewModel's upsert logic
     fun getDao(): MediaSearchDao = mediaSearchDao
+
+    // <--- NEW FUNCTION
+    suspend fun clearAll() {
+        mediaSearchDao.clearAllSearches()
+    }
 }

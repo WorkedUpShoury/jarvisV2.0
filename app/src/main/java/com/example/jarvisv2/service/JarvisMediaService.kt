@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.IBinder
@@ -107,12 +108,16 @@ class JarvisMediaService : Service() {
             this, 0, openAppIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
+        // The MediaStyle ensures proper layout for media controls and album art positioning
+        val mediaStyle = MediaStyle().setShowActionsInCompactView(0, 1, 2)
+
         val builder = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.mipmap.ic_launcher_round)
             .setContentIntent(pendingOpenApp)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setStyle(mediaStyle) // Apply MediaStyle here
 
         if (mediaInfo != null && mediaInfo.title != "No Media") {
             builder.setContentTitle(mediaInfo.title)
@@ -122,8 +127,19 @@ class JarvisMediaService : Service() {
                 try {
                     val decodedString = Base64.decode(mediaInfo.thumbnail, Base64.DEFAULT)
                     val bitmap = BitmapFactory.decodeByteArray(decodedString, 0, decodedString.size)
+
+                    // The Large Icon is the standard slot for album art in media notifications
                     builder.setLargeIcon(bitmap)
-                } catch (e: Exception) { }
+                } catch (e: Exception) {
+                    // Log the error but continue building the notification
+                    Log.e("MediaService", "Failed to decode/set thumbnail: ${e.message}")
+                    // FIX: Explicitly cast null to Bitmap? to resolve ambiguity (Line 137 in older versions)
+                    builder.setLargeIcon(null as Bitmap?)
+                }
+            } else {
+                // If there's no thumbnail, explicitly set null
+                // FIX: Explicitly cast null to Bitmap? to resolve ambiguity
+                builder.setLargeIcon(null as Bitmap?)
             }
 
             builder.addAction(generateAction(android.R.drawable.ic_media_previous, "Prev", ACTION_PREV))
@@ -134,10 +150,12 @@ class JarvisMediaService : Service() {
             }
             builder.addAction(generateAction(android.R.drawable.ic_media_next, "Next", ACTION_NEXT))
 
-            builder.setStyle(MediaStyle().setShowActionsInCompactView(0, 1, 2))
         } else {
+            // No media case (Idle state)
             builder.setContentTitle("Jarvis Media")
             builder.setContentText("Connected to PC...")
+            // FIX: Explicitly cast null to Bitmap? to resolve ambiguity (Line 153 in older versions)
+            builder.setLargeIcon(null as Bitmap?)
         }
 
         try {

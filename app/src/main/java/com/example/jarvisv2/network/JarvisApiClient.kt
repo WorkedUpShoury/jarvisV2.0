@@ -70,6 +70,14 @@ data class JarvisTask(
 @Serializable
 data class TaskPayload(val text: String)
 
+// --- NEW MODEL FOR LATEST REMINDER ENDPOINT ---
+@Serializable
+data class LatestReminderResponse(
+    val id: Int,
+    val text: String,
+    val ts: Double
+)
+
 class JarvisApiClient(private val context: Context) {
 
     private val client = HttpClient(Android) {
@@ -129,6 +137,16 @@ class JarvisApiClient(private val context: Context) {
                 val response: TaskListResponse = client.get("$serverUrl/api/reminders") {
                     url { parameters.append("token", apiToken) }
                 }.body()
+                Result.success(response)
+            } catch (e: Exception) { Result.failure(e) }
+        }
+    }
+
+    // --- NEW: Latest Reminder Notification Endpoint ---
+    suspend fun getLatestReminderNotification(serverUrl: String): Result<LatestReminderResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response: LatestReminderResponse = client.get("$serverUrl/api/reminders/latest").body()
                 Result.success(response)
             } catch (e: Exception) { Result.failure(e) }
         }

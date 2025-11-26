@@ -1,7 +1,6 @@
 package com.example.jarvisv2.data
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -18,6 +17,5 @@ interface ChatDao {
     @Query("DELETE FROM chat_messages")
     suspend fun clearAllMessages()
 
-    @Delete
-    suspend fun deleteMessage(message: ChatMessage)
+    // Removed: @Delete suspend fun deleteMessage(message: ChatMessage)
 }

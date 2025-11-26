@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
@@ -30,7 +31,6 @@ import com.example.jarvisv2.ui.components.ConnectionStatusIcon
 import com.example.jarvisv2.ui.components.VoiceStatusIcon
 import com.example.jarvisv2.ui.screens.AppsScreen
 import com.example.jarvisv2.ui.screens.ChatScreen
-// REMOVED: import com.example.jarvisv2.ui.screens.GameScreen <-- This line was causing an error
 import com.example.jarvisv2.ui.screens.MediaScreen
 import com.example.jarvisv2.ui.screens.SystemScreen
 import com.example.jarvisv2.ui.screens.WebScreen
@@ -60,7 +60,6 @@ fun AppRoot(
 
     Scaffold(
         topBar = {
-            // REMOVED: Check for Game route is no longer needed
             TopAppBar(
                 title = { Text("Jarvis V2 Control") },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -118,6 +117,18 @@ fun AppRoot(
                                 Icon(Icons.Default.SkipNext, "Next")
                             }
 
+                            // --- NEW FULLSCREEN BUTTON ---
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    // Sends "press f" command specifically as requested
+                                    viewModel.sendButtonCommand("press f")
+                                    isFabExpanded = false
+                                },
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ) {
+                                Icon(Icons.Default.Fullscreen, "Fullscreen (f)")
+                            }
+
                             SmallFloatingActionButton(
                                 onClick = {
                                     viewModel.sendButtonCommand("mute volume")
@@ -162,7 +173,6 @@ fun AppRoot(
             }
         },
         bottomBar = {
-            // REMOVED: Check for Game route
             NavigationBar(containerColor = DarkSurface) {
                 items.forEach { item ->
                     NavigationBarItem(
@@ -193,14 +203,11 @@ fun AppRoot(
                 SystemScreen(viewModel = viewModel)
             }
             composable(BottomNavItem.Media.route) {
-                // UPDATED: Removed the `onGameModeClick` parameter
                 MediaScreen(viewModel = viewModel)
             }
             composable(BottomNavItem.Apps.route) {
                 AppsScreen(viewModel)
             }
-            // REMOVED: composable(BottomNavItem.Game.route) { ... }
-
             composable(BottomNavItem.Web.route) {
                 WebScreen(viewModel)
             }

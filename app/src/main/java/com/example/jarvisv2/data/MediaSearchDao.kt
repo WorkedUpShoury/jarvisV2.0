@@ -19,4 +19,8 @@ interface MediaSearchDao {
     // Get the single most frequently searched query (sorted by count, then by most recent for ties)
     @Query("SELECT * FROM media_searches ORDER BY count DESC, lastUsed DESC LIMIT 1")
     fun getMostSearchedQuery(): Flow<MediaSearch?>
+
+    // <--- NEW: Function to clear all search history
+    @Query("DELETE FROM media_searches")
+    suspend fun clearAllSearches()
 }

@@ -45,10 +45,11 @@ fun ChatScreen(viewModel: MainViewModel) {
         AlertDialog(
             onDismissRequest = { showClearAllDialog = false },
             title = { Text("Clear Chat?") },
-            text = { Text("This will delete all message history.") },
+            text = { Text("This will delete all message history from the server's history file. Your app will then resync.") },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.clearChatHistory()
+                    // ACTION: Send command to server to delete the JSON file content
+                    viewModel.sendButtonCommand("clear chat history")
                     showClearAllDialog = false
                 }) {
                     Text("Clear All", color = DarkError)
@@ -95,7 +96,6 @@ fun ChatScreen(viewModel: MainViewModel) {
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
-                    // REMOVED: containerColor parameter to fix the error.
                     // The theme's default surface color (DarkSurface) will be used automatically.
                 ) {
                     DropdownMenuItem(
@@ -118,7 +118,8 @@ fun ChatScreen(viewModel: MainViewModel) {
             items(chatHistory) { chat ->
                 ChatBubble(
                     chat = chat,
-                    onDelete = { viewModel.deleteChatMessage(chat) },
+                    // UPDATED: Use the ViewModel function that sends the delete command to the server
+                    onDelete = { viewModel.sendChatDeleteCommand(chat.message) },
                     onRepeat = if (chat.sender == ChatSender.User) {
                         // Only allow repeating user commands
                         { viewModel.sendButtonCommand(chat.message) }

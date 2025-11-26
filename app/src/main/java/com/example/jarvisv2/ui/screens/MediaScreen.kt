@@ -15,8 +15,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Mouse
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -46,11 +44,8 @@ import com.example.jarvisv2.viewmodel.MainViewModel
 @Composable
 fun MediaScreen(viewModel: MainViewModel) {
     val mediaState by viewModel.mediaState.collectAsState()
-    var showTrackpad by remember { mutableStateOf(false) }
-    var showKeyboard by remember { mutableStateOf(false) }
-
-    if (showTrackpad) TrackpadDialog(viewModel) { showTrackpad = false }
-    if (showKeyboard) KeyboardDialog(viewModel) { showKeyboard = false }
+    // REMOVED: showTrackpad and showKeyboard states
+    // REMOVED: TrackpadDialog and KeyboardDialog calls
 
     // Use LazyColumn for the main screen layout to allow scrolling all sections
     LazyColumn(
@@ -82,34 +77,7 @@ fun MediaScreen(viewModel: MainViewModel) {
             MediaSearchHistory(viewModel = viewModel)
         }
 
-        // 4. Control Grid (Only Trackpad/Keyboard remain)
-        item {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2), // Changed to fixed 2 columns as only 2 items remain
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.heightIn(max = 200.dp) // Limit height of the grid
-            ) {
-                item {
-                    ActionButton(
-                        icon = Icons.Default.Mouse,
-                        text = "Trackpad",
-                        containerColor = DarkSurface,
-                        onClick = { showTrackpad = true }
-                    )
-                }
-                item {
-                    ActionButton(
-                        icon = Icons.Default.Keyboard,
-                        text = "Keyboard",
-                        containerColor = DarkSurface,
-                        onClick = { showKeyboard = true }
-                    )
-                }
-                // REMOVED: Playback control buttons (Prev, Play, Pause, Next)
-            }
-        }
+        // REMOVED: 4. Control Grid (Trackpad/Keyboard)
     }
 }
 

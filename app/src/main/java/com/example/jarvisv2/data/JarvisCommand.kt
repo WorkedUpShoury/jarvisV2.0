@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Notes // <-- NEW IMPORT
 import androidx.compose.ui.graphics.vector.ImageVector
 
 data class JarvisCommand(
@@ -108,4 +109,5 @@ val allCommands = listOf(
     JarvisCommand("routine", "Get today's routine", Icons.Default.Search),
     JarvisCommand("screen", "Get screen info", Icons.Default.Computer),
     JarvisCommand("remind me to ", "Set a reminder", Icons.Default.Settings),
+    JarvisCommand("create note ", "Create/Append Daily Note", Icons.Default.Notes), // <-- NEW COMMAND
 )

@@ -51,10 +51,22 @@ private val systemGridActions = listOf(
 @Composable
 fun SystemScreen(viewModel: MainViewModel) {
 
+    // Note/Keyboard/Trackpad States
+    var showNotesDialog by remember { mutableStateOf(false) }
+    var showTrackpad by remember { mutableStateOf(false) } // <-- NEW STATE
+    var showKeyboard by remember { mutableStateOf(false) } // <-- NEW STATE
+
     // Trigger refresh when screen opens
     LaunchedEffect(Unit) {
         viewModel.fetchSystemLevels()
     }
+
+    // Dialog Calls
+    if (showNotesDialog) {
+        NotesDialog(viewModel = viewModel) { showNotesDialog = false }
+    }
+    if (showTrackpad) TrackpadDialog(viewModel) { showTrackpad = false } // <-- NEW CALL
+    if (showKeyboard) KeyboardDialog(viewModel) { showKeyboard = false } // <-- NEW CALL
 
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -65,9 +77,10 @@ fun SystemScreen(viewModel: MainViewModel) {
             contentPadding = PaddingValues(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 0.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.height(100.dp)
+            modifier = Modifier.fillMaxWidth().wrapContentHeight()
         ) {
             items(maintenanceActions) { action ->
+                // Note: The Notes button logic is now handled in AppsScreen.kt as per the previous request.
                 ActionButton(
                     modifier = Modifier.fillMaxHeight(),
                     icon = action.icon!!,
@@ -82,8 +95,14 @@ fun SystemScreen(viewModel: MainViewModel) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // --- Window Actions ---
+        // --- Window Actions (Minimize, Fullscreen, Close) ---
         WindowActionsCard(viewModel = viewModel)
+
+        // --- NEW: Trackpad/Keyboard Controls Card ---
+        MouseKeyboardControlCard( // <-- NEW CARD PLACED HERE
+            onShowTrackpad = { showTrackpad = true },
+            onShowKeyboard = { showKeyboard = true }
+        )
 
         // --- Sliders & Power/Nav Actions ---
         LazyVerticalGrid(
@@ -110,6 +129,76 @@ fun SystemScreen(viewModel: MainViewModel) {
         }
     }
 }
+
+// --- NEW COMPOSABLE: MouseKeyboardControlCard ---
+@Composable
+private fun MouseKeyboardControlCard(
+    onShowTrackpad: () -> Unit,
+    onShowKeyboard: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Trackpad Button
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onShowTrackpad)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mouse,
+                    contentDescription = "Trackpad",
+                    tint = DarkPrimary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Trackpad",
+                    color = DarkOnSurface,
+                    fontSize = 12.sp
+                )
+            }
+
+            // Keyboard Button
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onShowKeyboard)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Keyboard,
+                    contentDescription = "Keyboard",
+                    tint = DarkPrimary,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Keyboard",
+                    color = DarkOnSurface,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+}
+
 
 @Composable
 private fun WindowActionsCard(viewModel: MainViewModel) {

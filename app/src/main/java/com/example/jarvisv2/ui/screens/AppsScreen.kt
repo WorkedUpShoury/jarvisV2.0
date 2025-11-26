@@ -19,10 +19,15 @@ import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.TravelExplore
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import com.example.jarvisv2.viewmodel.MainViewModel
 
 private val appActions = listOf(
+    Action("Notes", Icons.Default.Notes, "open notes dialog"), // <-- NEW: MOVED TO TOP
     Action("Spotify", Icons.Default.MusicNote, "open spotify"),
     Action("Chrome", Icons.Default.TravelExplore, "open chrome"),
     Action("Brave", Icons.Default.Shield, "open brave"),
@@ -39,6 +44,14 @@ private val appActions = listOf(
 
 @Composable
 fun AppsScreen(viewModel: MainViewModel) {
+    var showNotesDialog by remember { mutableStateOf(false) } // <-- ADDED STATE
+
+    if (showNotesDialog) {
+        NotesDialog(viewModel = viewModel) {
+            showNotesDialog = false
+        }
+    }
+
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 110.dp),
         // Updated padding: start/end/top=16dp, bottom=100dp to clear the navbar
@@ -47,12 +60,21 @@ fun AppsScreen(viewModel: MainViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(appActions) { action ->
-            ActionButton(
-                icon = action.icon,
-                text = action.name,
-                viewModel = viewModel,
-                command = action.command
-            )
+            if (action.command == "open notes dialog") {
+                // Special ActionButton logic to launch the dialog
+                ActionButton(
+                    icon = action.icon,
+                    text = action.name,
+                    onClick = { showNotesDialog = true } // <-- OPENS THE DIALOG
+                )
+            } else {
+                ActionButton(
+                    icon = action.icon,
+                    text = action.name,
+                    viewModel = viewModel,
+                    command = action.command
+                )
+            }
         }
     }
 }

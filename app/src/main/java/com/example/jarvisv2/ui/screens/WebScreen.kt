@@ -122,11 +122,11 @@ fun BrowserControlCard(viewModel: MainViewModel) {
                     color = MaterialTheme.colorScheme.error,
                     onClick = { viewModel.sendButtonCommand("browser close tab") }
                 )
-                // Reopen Closed Tab
+                // Switch Tab (REPLACED Reopen Tab)
                 NavIconButton(
-                    icon = Icons.AutoMirrored.Filled.Redo,
-                    desc = "Reopen Tab",
-                    onClick = { viewModel.sendButtonCommand("browser reopen tab") }
+                    icon = Icons.Default.SwapHoriz,
+                    desc = "Switch Tab",
+                    onClick = { viewModel.sendButtonCommand("ctrl tab") } // Command for switching tabs
                 )
             }
         }

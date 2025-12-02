@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.MusicNote
@@ -27,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.jarvisv2.ui.MainActivity
 import com.example.jarvisv2.ui.components.ConnectionStatusIcon
 import com.example.jarvisv2.ui.components.VoiceStatusIcon
 import com.example.jarvisv2.ui.screens.AppsScreen
@@ -57,6 +57,11 @@ fun AppRoot(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     var isFabExpanded by remember { mutableStateOf(false) }
+
+    // --- NEW: Sync current route to MainActivity for Notification Logic ---
+    LaunchedEffect(currentRoute) {
+        MainActivity.currentRoute = currentRoute
+    }
 
     Scaffold(
         topBar = {

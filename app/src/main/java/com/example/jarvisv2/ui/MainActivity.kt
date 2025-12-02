@@ -59,10 +59,13 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    // --- NEW: Companion object to track foreground state ---
+    // --- UPDATED: Companion object to track foreground state AND current route ---
     companion object {
         @Volatile
         var isAppInForeground = false
+
+        @Volatile
+        var currentRoute: String? = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,7 +83,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // --- NEW: Lifecycle methods for Notification Logic ---
+    // --- Lifecycle methods for Notification Logic ---
     override fun onResume() {
         super.onResume()
         isAppInForeground = true

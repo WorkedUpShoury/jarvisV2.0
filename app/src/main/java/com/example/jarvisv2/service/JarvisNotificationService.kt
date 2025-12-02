@@ -4,6 +4,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -29,6 +30,13 @@ class JarvisNotificationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // --- FIX: Recover URL if service restarted by system ---
+        if (serverUrl == null) {
+            val prefs = getSharedPreferences("jarvis_prefs", Context.MODE_PRIVATE)
+            serverUrl = prefs.getString("server_url", null)
+        }
+
         apiClient = JarvisApiClient(this)
         startForegroundService()
         startPolling()
@@ -110,8 +118,11 @@ class JarvisNotificationService : Service() {
     }
 
     private fun sendNotification(message: String) {
-        // --- NEW: Check if app is in focus ---
-        if (MainActivity.isAppInForeground) {
+        // --- UPDATED LOGIC ---
+        // Block notification ONLY IF:
+        // 1. App is in foreground
+        // 2. AND User is currently on the Chat Screen ("chat")
+        if (MainActivity.isAppInForeground && MainActivity.currentRoute == "chat") {
             return
         }
 

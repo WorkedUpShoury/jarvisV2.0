@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Edit // <--- NEW IMPORT
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Games
 import androidx.compose.material.icons.filled.Memory
@@ -27,7 +28,8 @@ import androidx.compose.ui.unit.dp
 import com.example.jarvisv2.viewmodel.MainViewModel
 
 private val appActions = listOf(
-    Action("Notes", Icons.Default.Notes, "open notes dialog"), // <-- NEW: MOVED TO TOP
+    Action("Notes", Icons.Default.Notes, "open notes dialog"),
+    Action("Obsidian", Icons.Default.Edit, "open obsidian"), // <--- NEW ACTION
     Action("Spotify", Icons.Default.MusicNote, "open spotify"),
     Action("Chrome", Icons.Default.TravelExplore, "open chrome"),
     Action("Brave", Icons.Default.Shield, "open brave"),
@@ -44,7 +46,7 @@ private val appActions = listOf(
 
 @Composable
 fun AppsScreen(viewModel: MainViewModel) {
-    var showNotesDialog by remember { mutableStateOf(false) } // <-- ADDED STATE
+    var showNotesDialog by remember { mutableStateOf(false) }
 
     if (showNotesDialog) {
         NotesDialog(viewModel = viewModel) {
@@ -65,7 +67,7 @@ fun AppsScreen(viewModel: MainViewModel) {
                 ActionButton(
                     icon = action.icon,
                     text = action.name,
-                    onClick = { showNotesDialog = true } // <-- OPENS THE DIALOG
+                    onClick = { showNotesDialog = true }
                 )
             } else {
                 ActionButton(

@@ -2,6 +2,7 @@ package com.example.jarvisv2.viewmodel
 
 import android.app.Application
 import android.content.Intent
+import android.net.Uri // <--- NEW IMPORT
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
@@ -22,10 +23,10 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
 import android.os.Parcelable
-import com.example.jarvisv2.data.MediaSearch // <--- NEW IMPORT
-import com.example.jarvisv2.data.MediaSearchRepository // <--- NEW IMPORT
+import com.example.jarvisv2.data.MediaSearch
+import com.example.jarvisv2.data.MediaSearchRepository
 import kotlinx.coroutines.Dispatchers
-import java.security.MessageDigest // <--- NEW IMPORT for hashing
+import java.security.MessageDigest
 
 class MainViewModel(
     private val app: Application,
@@ -34,7 +35,7 @@ class MainViewModel(
 
     private val apiClient = JarvisApiClient(app.applicationContext)
     private val chatRepository: ChatRepository
-    private val mediaSearchRepository: MediaSearchRepository // <--- NEW REPO
+    private val mediaSearchRepository: MediaSearchRepository
 
     // --- STATES ---
     private val _serverUrl = MutableStateFlow<String?>(null)
@@ -43,15 +44,17 @@ class MainViewModel(
     private val _commandText = MutableStateFlow("")
     private val _lastButtonCommand = MutableStateFlow<String?>(null)
 
+    // --- NEW: Image Upload State ---
+    private val _selectedImageUri = MutableStateFlow<Uri?>(null)
+    val selectedImageUri: StateFlow<Uri?> = _selectedImageUri.asStateFlow()
+
     private val _volumeLevel = MutableStateFlow(5f)
     private val _brightnessLevel = MutableStateFlow(5f)
 
     val mediaState: StateFlow<MediaStateResponse?> = JarvisMediaService.sharedMediaState.asStateFlow()
 
-    // --- NEW MEDIA SEARCH FLOWS ---
-    val recentMediaSearches: StateFlow<List<MediaSearch>> // <--- NEW FLOW
-    val mostSearchedQuery: StateFlow<MediaSearch?> // <--- NEW FLOW
-
+    val recentMediaSearches: StateFlow<List<MediaSearch>>
+    val mostSearchedQuery: StateFlow<MediaSearch?>
 
     private var consecutiveFailures = 0
     private var discoveryJob: Job? = null
@@ -77,14 +80,13 @@ class MainViewModel(
     }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     init {
-        val database = AppDatabase.getDatabase(app) // Get the single database instance
+        val database = AppDatabase.getDatabase(app)
         chatRepository = ChatRepository(database.chatDao())
-        mediaSearchRepository = MediaSearchRepository(database.mediaSearchDao()) // <--- NEW REPO INSTANTIATION
+        mediaSearchRepository = MediaSearchRepository(database.mediaSearchDao())
 
         chatHistory = chatRepository.allMessages.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-        recentMediaSearches = mediaSearchRepository.recentSearches.stateIn(viewModelScope, SharingStarted.Lazily, emptyList()) // <--- NEW FLOW COLLECTION
-        mostSearchedQuery = mediaSearchRepository.mostSearchedQuery.stateIn(viewModelScope, SharingStarted.Lazily, null) // <--- NEW FLOW COLLECTION
-
+        recentMediaSearches = mediaSearchRepository.recentSearches.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+        mostSearchedQuery = mediaSearchRepository.mostSearchedQuery.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
         startServerDiscovery()
         observeVoiceServiceCommands()
@@ -108,7 +110,6 @@ class MainViewModel(
                     _isDiscovering.value = false
                     consecutiveFailures = 0
 
-                    // 1. Start Media Service
                     JarvisMediaService.serverUrl = url
                     val mediaIntent = Intent(app.applicationContext, JarvisMediaService::class.java)
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -117,7 +118,6 @@ class MainViewModel(
                         app.applicationContext.startService(mediaIntent)
                     }
 
-                    // 2. Start Notification Service (NEW)
                     JarvisNotificationService.serverUrl = url
                     val notifIntent = Intent(app.applicationContext, JarvisNotificationService::class.java)
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -131,38 +131,26 @@ class MainViewModel(
         }
     }
 
-    // --- HISTORY POLLING (Source of Truth) ---
     private fun startHistoryPolling() {
         viewModelScope.launch {
             serverUrl.collect { url ->
                 if (url != null) {
-                    // FIX: Clear local DB on new connection to prevent duplicates
                     chatRepository.clearAll()
-
                     var processedCount = 0
-
                     while (true) {
                         if (_serverUrl.value == url) {
                             apiClient.getChatHistory(url).fold(
                                 onSuccess = { history ->
                                     consecutiveFailures = 0
-
-                                    // If history on server shrunk (e.g. file cleared), reset local counter
                                     if (history.size < processedCount) {
                                         processedCount = 0
-                                        // Optional: Clear again if server history was wiped
                                         chatRepository.clearAll()
                                     }
-
-                                    // Process NEW items
                                     if (history.size > processedCount) {
                                         val newItems = history.subList(processedCount, history.size)
                                         for (item in newItems) {
-                                            // Convert server role to UI sender
                                             val sender = if (item.role == "user") ChatSender.User else ChatSender.System
                                             val message = item.parts.text
-
-                                            // Insert into local DB for display
                                             chatRepository.insert(ChatMessage(message = message, sender = sender))
                                         }
                                         processedCount = history.size
@@ -175,7 +163,7 @@ class MainViewModel(
                                 }
                             )
                         }
-                        delay(1500) // Poll every 1.5s
+                        delay(1500)
                     }
                 }
             }
@@ -197,21 +185,36 @@ class MainViewModel(
 
     fun onCommandTextChanged(text: String) { _commandText.value = text }
 
+    // --- NEW: Image Selection ---
+    fun onImageSelected(uri: Uri?) {
+        _selectedImageUri.value = uri
+    }
+
+    // --- UPDATED: Send Logic ---
     fun sendCurrentCommand() {
         val command = _commandText.value.trim()
-        if (command.isEmpty()) return
+        val imageUri = _selectedImageUri.value
 
-        // We do NOT insert the message locally immediately.
-        // We send it to server -> Server writes to file -> We poll file -> UI updates.
-        // This guarantees perfect sync.
-        sendCommand(command)
+        // Do nothing if both text and image are empty
+        if (command.isEmpty() && imageUri == null) return
+
+        if (imageUri != null) {
+            // Send with image
+            val finalCommand = if (command.isEmpty()) "Analyze this image" else command
+            sendImageCommand(finalCommand, imageUri)
+        } else {
+            // Send text only
+            sendCommand(command)
+        }
+
+        // Reset inputs
         _commandText.value = ""
+        _selectedImageUri.value = null
     }
 
     private fun sendCommand(command: String) {
         val url = _serverUrl.value
         if (url == null) {
-            // If disconnected, show local error
             viewModelScope.launch {
                 chatRepository.insert(ChatMessage(message = "Error: Server not found.", sender = ChatSender.System))
             }
@@ -222,13 +225,49 @@ class MainViewModel(
         viewModelScope.launch {
             _lastCommandStatus.value = CommandStatus.Loading
             apiClient.sendCommand(url, command).fold(
-                onSuccess = {
-                    _lastCommandStatus.value = CommandStatus.Success
-                },
-                onFailure = {
-                    _lastCommandStatus.value = CommandStatus.Error(it.message ?: "Unknown error")
-                }
+                onSuccess = { _lastCommandStatus.value = CommandStatus.Success },
+                onFailure = { _lastCommandStatus.value = CommandStatus.Error(it.message ?: "Unknown error") }
             )
+        }
+    }
+
+    // --- NEW: Send Image Helper ---
+    private fun sendImageCommand(command: String, uri: Uri) {
+        val url = _serverUrl.value ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            _lastCommandStatus.value = CommandStatus.Loading
+            try {
+                val bytes = getCompressedImageBytes(uri)
+                if (bytes != null) {
+                    apiClient.sendCommandWithImage(url, command, bytes).fold(
+                        onSuccess = { _lastCommandStatus.value = CommandStatus.Success },
+                        onFailure = { _lastCommandStatus.value = CommandStatus.Error(it.message ?: "Upload failed") }
+                    )
+                } else {
+                    _lastCommandStatus.value = CommandStatus.Error("Failed to process image")
+                }
+            } catch (e: Exception) {
+                _lastCommandStatus.value = CommandStatus.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+
+    // --- NEW: Compression Helper ---
+    private fun getCompressedImageBytes(uri: Uri): ByteArray? {
+        return try {
+            val inputStream = app.contentResolver.openInputStream(uri)
+            val bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+            inputStream?.close()
+
+            if (bitmap == null) return null
+
+            val outputStream = java.io.ByteArrayOutputStream()
+            // Compress to JPEG, Quality 70 to keep it light for LAN transfer
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
+            outputStream.toByteArray()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 
@@ -264,42 +303,26 @@ class MainViewModel(
         JarvisVoiceService.latestVoiceResult
             .filter { it.isNotEmpty() }
             .onEach { command ->
-                // Voice commands are sent to server, server writes to history
                 sendCommand(command)
                 JarvisVoiceService.latestVoiceResult.value = ""
             }
             .launchIn(viewModelScope)
     }
 
-    // --- CHAT DELETION LOGIC (Updated to use Server Commands) ---
-
-    /**
-     * Generates a stable hash of the message content and sends a command to the server
-     * to delete the matching entry in the JSON file.
-     */
     fun sendChatDeleteCommand(messageText: String) {
         val hash = generateStableHash(messageText)
         val command = "delete chat message $hash"
         sendButtonCommand(command)
     }
 
-    /**
-     * Generates a stable 8-character SHA-256 hash of a string.
-     */
     private fun generateStableHash(input: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
         val hashBytes = digest.digest(input.toByteArray(Charsets.UTF_8))
-        // Truncate and convert to hex string
         return hashBytes.slice(0..3).joinToString("") { "%02x".format(it) }
-        // This gives a stable 8-char hash (4 bytes)
     }
-
-    // --- MEDIA SEARCH LOGIC ---
 
     fun saveMediaSearch(query: String, source: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            // Retrieve current searches to find an existing entry and increment count
-            // Note: In a real app, this read-then-write logic would be a single atomic database transaction.
             val currentSearches = mediaSearchRepository.recentSearches.first()
             val existing = currentSearches.find { it.query.lowercase() == query.lowercase() }
 
@@ -322,9 +345,6 @@ class MainViewModel(
         sendButtonCommand(command)
     }
 
-    /**
-     * Clears all saved media search entries from the local database.
-     */
     fun clearMediaSearchHistory() {
         viewModelScope.launch(Dispatchers.IO) {
             mediaSearchRepository.clearAll()

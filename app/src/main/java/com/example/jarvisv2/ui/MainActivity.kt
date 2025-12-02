@@ -2,6 +2,8 @@ package com.example.jarvisv2.ui
 
 import android.Manifest
 import android.app.Application
+import android.app.NotificationManager
+import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -50,14 +52,18 @@ class MainActivity : ComponentActivity() {
     private val permissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
-            val notifGranted = permissions[Manifest.permission.POST_NOTIFICATIONS] ?: false
 
             // Only toggle voice service if audio is granted.
-            // Notifications are optional but recommended.
             if (audioGranted) {
                 toggleVoiceService()
             }
         }
+
+    // --- NEW: Companion object to track foreground state ---
+    companion object {
+        @Volatile
+        var isAppInForeground = false
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -71,6 +77,31 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    // --- NEW: Lifecycle methods for Notification Logic ---
+    override fun onResume() {
+        super.onResume()
+        isAppInForeground = true
+        clearMessageNotifications()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isAppInForeground = false
+    }
+
+    /**
+     * Clears all dismissible notifications (Chat Messages).
+     * Foreground Service notifications (Media, Monitor, Mic) are 'ongoing' and will persist.
+     */
+    private fun clearMessageNotifications() {
+        try {
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.cancelAll()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 

@@ -16,6 +16,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AddCircle // <--- NEW IMPORT
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.AlertDialog
@@ -49,9 +50,6 @@ import com.example.jarvisv2.data.ChatMessage
 import com.example.jarvisv2.viewmodel.ChatSender
 import kotlinx.coroutines.flow.StateFlow
 
-// ============================================================================
-//  CONNECTION STATUS ICON
-// ============================================================================
 @Composable
 fun ConnectionStatusIcon(
     serverUrlFlow: StateFlow<String?>,
@@ -85,9 +83,6 @@ fun ConnectionStatusIcon(
     }
 }
 
-// ============================================================================
-//  VOICE STATUS ICON
-// ============================================================================
 @Composable
 fun VoiceStatusIcon(
     detailedStateFlow: StateFlow<VoiceListener.VoiceState>,
@@ -131,9 +126,6 @@ fun VoiceStatusIcon(
     }
 }
 
-// ============================================================================
-//  CHAT BUBBLE (Long Press Menu: Copy, Repeat, Delete)
-// ============================================================================
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ChatBubble(
@@ -148,7 +140,6 @@ fun ChatBubble(
     val context = LocalContext.current
     var showOptionsDialog by remember { mutableStateOf(false) }
 
-    // Options Dialog
     if (showOptionsDialog) {
         AlertDialog(
             onDismissRequest = { showOptionsDialog = false },
@@ -158,7 +149,6 @@ fun ChatBubble(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    // 1. Copy
                     TextButton(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(chat.message))
@@ -170,7 +160,6 @@ fun ChatBubble(
                         Text("Copy Text", color = DarkOnSurface)
                     }
 
-                    // 2. Repeat (User only)
                     if (onRepeat != null) {
                         TextButton(
                             onClick = {
@@ -183,7 +172,6 @@ fun ChatBubble(
                         }
                     }
 
-                    // 3. Delete
                     TextButton(
                         onClick = {
                             onDelete()
@@ -220,7 +208,6 @@ fun ChatBubble(
                 .background(bubbleColor)
                 .combinedClickable(
                     onClick = {
-                        // Tap to copy quickly
                         clipboardManager.setText(AnnotatedString(chat.message))
                         Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
                     },
@@ -234,16 +221,15 @@ fun ChatBubble(
     }
 }
 
-// ============================================================================
-//  COMMAND INPUT BAR
-// ============================================================================
+// --- UPDATED: CommandInputBar with Attach Button ---
 @Composable
 fun CommandInputBar(
     text: String,
     onTextChanged: (String) -> Unit,
     onSend: () -> Unit,
     suggestions: List<String>,
-    onSuggestionClick: (String) -> Unit
+    onSuggestionClick: (String) -> Unit,
+    onAttachClick: () -> Unit = {} // <--- NEW CALLBACK
 ) {
     val focusManager = LocalFocusManager.current
 
@@ -253,7 +239,6 @@ fun CommandInputBar(
             .background(DarkSurface)
             .padding(8.dp)
     ) {
-        // Suggestions Row
         if (suggestions.isNotEmpty()) {
             LazyRow(
                 modifier = Modifier
@@ -269,50 +254,62 @@ fun CommandInputBar(
             }
         }
 
-        // Text Field
-        OutlinedTextField(
-            value = text,
-            onValueChange = onTextChanged,
+        // --- ROW for Text Field + Attach Button ---
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Type / for commands…") },
-            trailingIcon = {
-                IconButton(onClick = {
-                    onSend()
-                    focusManager.clearFocus()
-                }) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send",
-                        tint = DarkPrimary
-                    )
-                }
-            },
-            shape = RoundedCornerShape(22.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = Color.Black,
-                unfocusedContainerColor = Color.Black,
-                focusedBorderColor = DarkPrimary,
-                unfocusedBorderColor = Color.Gray,
-                cursorColor = DarkPrimary
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-            keyboardActions = KeyboardActions(
-                onSend = {
-                    onSend()
-                    focusManager.clearFocus()
-                }
-            ),
-            singleLine = true
-        )
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Attach Button
+            IconButton(onClick = onAttachClick) {
+                Icon(
+                    imageVector = Icons.Default.AddCircle,
+                    contentDescription = "Attach",
+                    tint = Color.Gray,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
+            // Input Field
+            OutlinedTextField(
+                value = text,
+                onValueChange = onTextChanged,
+                modifier = Modifier.weight(1f), // Fill remaining width
+                placeholder = { Text("Type / for commands…") },
+                trailingIcon = {
+                    IconButton(onClick = {
+                        onSend()
+                        focusManager.clearFocus()
+                    }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send",
+                            tint = DarkPrimary
+                        )
+                    }
+                },
+                shape = RoundedCornerShape(22.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = Color.Black,
+                    unfocusedContainerColor = Color.Black,
+                    focusedBorderColor = DarkPrimary,
+                    unfocusedBorderColor = Color.Gray,
+                    cursorColor = DarkPrimary
+                ),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                keyboardActions = KeyboardActions(
+                    onSend = {
+                        onSend()
+                        focusManager.clearFocus()
+                    }
+                ),
+                singleLine = true
+            )
+        }
     }
 }
 
-// ============================================================================
-//  SUGGESTION CHIP (Fixed Outline)
-// ============================================================================
 @Composable
 fun SuggestionChip(text: String, onClick: () -> Unit) {
-    // Using Surface with 'shape' fixes the clipping/outline issue
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(14.dp),

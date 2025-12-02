@@ -6,7 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.* // Ensures Material 3 usage
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,17 +21,138 @@ import com.example.jarvisv2.ui.theme.DarkSurface
 import com.example.jarvisv2.viewmodel.ChatSender
 import com.example.jarvisv2.viewmodel.MainViewModel
 
+// --- NEW IMPORTS FOR IMAGE PICKING ---
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.FileProvider
+import java.io.File
+import android.net.Uri
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import android.graphics.BitmapFactory
+import androidx.compose.ui.graphics.asImageBitmap
+
+@Composable
+fun ImagePreview(uri: Uri, onRemove: () -> Unit) {
+    val context = LocalContext.current
+    val bitmap = remember(uri) {
+        try {
+            val stream = context.contentResolver.openInputStream(uri)
+            BitmapFactory.decodeStream(stream).asImageBitmap()
+        } catch (e: Exception) { null }
+    }
+
+    if (bitmap != null) {
+        Box(modifier = Modifier.padding(start = 8.dp, bottom = 8.dp)) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = "Preview",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))
+            )
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(20.dp)
+                    .background(Color.Black.copy(alpha=0.6f), CircleShape)
+            ) {
+                Icon(Icons.Default.Close, "Remove", tint = Color.White, modifier = Modifier.size(14.dp))
+            }
+        }
+    }
+}
+
 @Composable
 fun ChatScreen(viewModel: MainViewModel) {
     val commandText by viewModel.commandText.collectAsState()
     val chatHistory by viewModel.chatHistory.collectAsState()
     val suggestions by viewModel.suggestions.collectAsState()
+    val selectedImage by viewModel.selectedImageUri.collectAsState() // <--- Observe Image
 
     val listState = rememberLazyListState()
 
     // State for Dialogs and Menus
     var showClearAllDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+
+    // --- Image Pickers Setup ---
+    val context = LocalContext.current
+    var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
+
+    // 1. Gallery Picker
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        viewModel.onImageSelected(uri)
+    }
+
+    // 2. Camera Launcher
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && tempPhotoUri != null) {
+            viewModel.onImageSelected(tempPhotoUri)
+        }
+    }
+
+    // Function to launch camera
+    fun launchCamera() {
+        try {
+            val file = File.createTempFile("camera_img_", ".jpg", context.cacheDir)
+            // This requires the <provider> setup in AndroidManifest and file_paths.xml
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
+            tempPhotoUri = uri
+            cameraLauncher.launch(uri)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // Attachment Options Dialog
+    var showAttachDialog by remember { mutableStateOf(false) }
+
+    if (showAttachDialog) {
+        AlertDialog(
+            onDismissRequest = { showAttachDialog = false },
+            title = { Text("Attach Image") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    TextButton(onClick = {
+                        showAttachDialog = false
+                        galleryLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }) {
+                        Text("Choose from Gallery", color = DarkOnSurface, fontSize = 16.sp)
+                    }
+
+                    TextButton(onClick = {
+                        showAttachDialog = false
+                        launchCamera()
+                    }) {
+                        Text("Take Photo", color = DarkOnSurface, fontSize = 16.sp)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showAttachDialog = false }) {
+                    Text("Cancel", color = Color.Gray)
+                }
+            },
+            containerColor = DarkSurface
+        )
+    }
 
     // Auto-scroll when new chat arrives
     LaunchedEffect(chatHistory.size) {
@@ -48,7 +169,6 @@ fun ChatScreen(viewModel: MainViewModel) {
             text = { Text("This will delete all message history from the server's history file. Your app will then resync.") },
             confirmButton = {
                 TextButton(onClick = {
-                    // ACTION: Send command to server to delete the JSON file content
                     viewModel.sendButtonCommand("clear chat history")
                     showClearAllDialog = false
                 }) {
@@ -96,7 +216,6 @@ fun ChatScreen(viewModel: MainViewModel) {
                 DropdownMenu(
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false },
-                    // The theme's default surface color (DarkSurface) will be used automatically.
                 ) {
                     DropdownMenuItem(
                         text = { Text("Clear History", color = DarkError) },
@@ -118,10 +237,8 @@ fun ChatScreen(viewModel: MainViewModel) {
             items(chatHistory) { chat ->
                 ChatBubble(
                     chat = chat,
-                    // UPDATED: Use the ViewModel function that sends the delete command to the server
                     onDelete = { viewModel.sendChatDeleteCommand(chat.message) },
                     onRepeat = if (chat.sender == ChatSender.User) {
-                        // Only allow repeating user commands
                         { viewModel.sendButtonCommand(chat.message) }
                     } else null
                 )
@@ -129,6 +246,13 @@ fun ChatScreen(viewModel: MainViewModel) {
         }
 
         Spacer(modifier = Modifier.height(8.dp))
+
+        // --- Image Preview Area ---
+        if (selectedImage != null) {
+            ImagePreview(uri = selectedImage!!) {
+                viewModel.onImageSelected(null)
+            }
+        }
 
         // --- Input Bar ---
         CommandInputBar(
@@ -138,7 +262,8 @@ fun ChatScreen(viewModel: MainViewModel) {
             suggestions = suggestions,
             onSuggestionClick = {
                 viewModel.onCommandTextChanged(it)
-            }
+            },
+            onAttachClick = { showAttachDialog = true } // <--- Trigger Dialog
         )
     }
 }

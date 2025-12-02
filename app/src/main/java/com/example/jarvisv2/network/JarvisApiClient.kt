@@ -13,7 +13,11 @@ import io.ktor.client.plugins.logging.Logging
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
+import io.ktor.client.request.forms.submitFormWithBinaryData
+import io.ktor.client.request.forms.formData
 import io.ktor.http.ContentType
+import io.ktor.http.Headers
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.Dispatchers
@@ -54,7 +58,6 @@ data class SystemLevelsResponse(val volume: Int, val brightness: Int)
 @Serializable
 data class MediaStateResponse(val title: String, val artist: String, val is_playing: Boolean, val thumbnail: String?)
 
-// --- NEW REMINDER MODELS ---
 @Serializable
 data class TaskListResponse(val tasks: List<JarvisTask>)
 
@@ -70,7 +73,6 @@ data class JarvisTask(
 @Serializable
 data class TaskPayload(val text: String)
 
-// --- NEW MODEL FOR LATEST REMINDER ENDPOINT ---
 @Serializable
 data class LatestReminderResponse(
     val id: Int,
@@ -118,7 +120,6 @@ class JarvisApiClient(private val context: Context) {
         }
     }
 
-    // --- NEW: Events Stream (Best for Notifications) ---
     suspend fun getEvents(serverUrl: String, since: Int): Result<JarvisEventResponse> {
         return withContext(Dispatchers.IO) {
             try {
@@ -130,7 +131,6 @@ class JarvisApiClient(private val context: Context) {
         }
     }
 
-    // --- NEW: Reminders List (As Requested) ---
     suspend fun getReminders(serverUrl: String): Result<TaskListResponse> {
         return withContext(Dispatchers.IO) {
             try {
@@ -142,7 +142,6 @@ class JarvisApiClient(private val context: Context) {
         }
     }
 
-    // --- NEW: Latest Reminder Notification Endpoint ---
     suspend fun getLatestReminderNotification(serverUrl: String): Result<LatestReminderResponse> {
         return withContext(Dispatchers.IO) {
             try {
@@ -227,6 +226,28 @@ class JarvisApiClient(private val context: Context) {
                 }.body()
                 Result.success(response)
             } catch (e: Exception) { Result.failure(e) }
+        }
+    }
+
+    // --- NEW: Send Command with Image ---
+    suspend fun sendCommandWithImage(serverUrl: String, command: String, imageBytes: ByteArray): Result<JarvisCommandResponse> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val response: JarvisCommandResponse = client.submitFormWithBinaryData(
+                    url = "$serverUrl/command_with_image",
+                    formData = formData {
+                        append("token", apiToken)
+                        append("command", command)
+                        append("image", imageBytes, Headers.build {
+                            append(HttpHeaders.ContentType, "image/jpeg")
+                            append(HttpHeaders.ContentDisposition, "filename=\"upload.jpg\"")
+                        })
+                    }
+                ).body()
+                Result.success(response)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
     }
 }

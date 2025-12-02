@@ -39,9 +39,11 @@ class JarvisVoiceService : Service() {
             detailedVoiceState.value = state
             if (state is VoiceListener.VoiceState.Result) {
                 val text = state.text.lowercase().trim()
-                if (text.contains("jarvis")) {
-                    val command = text.replace("jarvis", "").trim()
-                    if (command.isNotEmpty()) latestVoiceResult.value = command
+
+                // MODIFIED: Removed the check for "jarvis" keyword.
+                // Now passes all captured speech directly as a command.
+                if (text.isNotEmpty()) {
+                    latestVoiceResult.value = text
                 }
             }
         }.launchIn(serviceScope)

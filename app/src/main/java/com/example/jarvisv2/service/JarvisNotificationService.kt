@@ -42,6 +42,7 @@ class JarvisNotificationService : Service() {
             .setContentTitle("Jarvis Active")
             .setContentText("Monitoring for messages & reminders...")
             .setSmallIcon(R.mipmap.ic_launcher_round)
+            .setOngoing(true) // Ensure it sticks
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -97,8 +98,6 @@ class JarvisNotificationService : Service() {
         val now = System.currentTimeMillis()
 
         // Heuristic: Check if 'ts' is Seconds or Milliseconds.
-        // Current seconds ~1.7 billion (10 digits). Current millis ~1.7 trillion (13 digits).
-        // If ts is small (< 100 billion), it's likely Seconds.
         val eventTimeMillis = if (ts < 100_000_000_000) {
             (ts * 1000).toLong()
         } else {
@@ -111,6 +110,11 @@ class JarvisNotificationService : Service() {
     }
 
     private fun sendNotification(message: String) {
+        // --- NEW: Check if app is in focus ---
+        if (MainActivity.isAppInForeground) {
+            return
+        }
+
         val channelId = "JarvisMessageChannel"
         createNotificationChannel(channelId, "Jarvis Messages", NotificationManager.IMPORTANCE_HIGH)
 

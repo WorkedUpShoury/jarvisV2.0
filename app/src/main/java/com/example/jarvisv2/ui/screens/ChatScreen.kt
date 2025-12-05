@@ -21,7 +21,6 @@ import com.example.jarvisv2.ui.theme.DarkSurface
 import com.example.jarvisv2.viewmodel.ChatSender
 import com.example.jarvisv2.viewmodel.MainViewModel
 
-// --- NEW IMPORTS FOR IMAGE PICKING ---
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.result.PickVisualMediaRequest
@@ -79,7 +78,7 @@ fun ChatScreen(viewModel: MainViewModel) {
     val commandText by viewModel.commandText.collectAsState()
     val chatHistory by viewModel.chatHistory.collectAsState()
     val suggestions by viewModel.suggestions.collectAsState()
-    val selectedImage by viewModel.selectedImageUri.collectAsState() // <--- Observe Image
+    val selectedImage by viewModel.selectedImageUri.collectAsState()
 
     val listState = rememberLazyListState()
 
@@ -91,14 +90,12 @@ fun ChatScreen(viewModel: MainViewModel) {
     val context = LocalContext.current
     var tempPhotoUri by remember { mutableStateOf<Uri?>(null) }
 
-    // 1. Gallery Picker
     val galleryLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri ->
         viewModel.onImageSelected(uri)
     }
 
-    // 2. Camera Launcher
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
@@ -107,11 +104,9 @@ fun ChatScreen(viewModel: MainViewModel) {
         }
     }
 
-    // Function to launch camera
     fun launchCamera() {
         try {
             val file = File.createTempFile("camera_img_", ".jpg", context.cacheDir)
-            // This requires the <provider> setup in AndroidManifest and file_paths.xml
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
             tempPhotoUri = uri
             cameraLauncher.launch(uri)
@@ -120,7 +115,6 @@ fun ChatScreen(viewModel: MainViewModel) {
         }
     }
 
-    // Attachment Options Dialog
     var showAttachDialog by remember { mutableStateOf(false) }
 
     if (showAttachDialog) {
@@ -154,14 +148,12 @@ fun ChatScreen(viewModel: MainViewModel) {
         )
     }
 
-    // Auto-scroll when new chat arrives
     LaunchedEffect(chatHistory.size) {
         if (chatHistory.isNotEmpty()) {
             listState.animateScrollToItem(chatHistory.size - 1)
         }
     }
 
-    // --- Clear All Confirmation Dialog ---
     if (showClearAllDialog) {
         AlertDialog(
             onDismissRequest = { showClearAllDialog = false },
@@ -191,7 +183,6 @@ fun ChatScreen(viewModel: MainViewModel) {
             .fillMaxSize()
             .padding(12.dp)
     ) {
-        // --- Header Row with Three-Dot Menu ---
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -203,7 +194,6 @@ fun ChatScreen(viewModel: MainViewModel) {
                 fontSize = 18.sp
             )
 
-            // Menu Box
             Box {
                 IconButton(onClick = { showMenu = true }) {
                     Icon(
@@ -228,7 +218,6 @@ fun ChatScreen(viewModel: MainViewModel) {
             }
         }
 
-        // --- Chat List ---
         LazyColumn(
             modifier = Modifier.weight(1f),
             state = listState,
@@ -247,23 +236,22 @@ fun ChatScreen(viewModel: MainViewModel) {
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // --- Image Preview Area ---
         if (selectedImage != null) {
             ImagePreview(uri = selectedImage!!) {
                 viewModel.onImageSelected(null)
             }
         }
 
-        // --- Input Bar ---
         CommandInputBar(
             text = commandText,
             onTextChanged = viewModel::onCommandTextChanged,
-            onSend = viewModel::sendCurrentCommand,
+            // --- ENABLE CONVERSATION MODE HERE ---
+            onSend = { viewModel.sendCurrentCommand(isConversation = true) },
             suggestions = suggestions,
             onSuggestionClick = {
                 viewModel.onCommandTextChanged(it)
             },
-            onAttachClick = { showAttachDialog = true } // <--- Trigger Dialog
+            onAttachClick = { showAttachDialog = true }
         )
     }
 }

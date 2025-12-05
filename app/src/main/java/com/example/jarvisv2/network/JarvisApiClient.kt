@@ -34,8 +34,13 @@ import javax.jmdns.JmDNS
 import javax.jmdns.ServiceEvent
 import javax.jmdns.ServiceListener
 
+// --- UPDATED REQUEST MODEL ---
 @Serializable
-data class JarvisCommandRequest(val command: String, val token: String)
+data class JarvisCommandRequest(
+    val command: String,
+    val token: String,
+    val conversation_mode: Boolean = false // <--- ADDED
+)
 
 @Serializable
 data class JarvisCommandResponse(val ok: Boolean, val request_id: String)
@@ -216,10 +221,15 @@ class JarvisApiClient(private val context: Context) {
         return String.format(java.util.Locale.US, "%d.%d.%d.%d", ipInt and 0xFF, ipInt shr 8 and 0xFF, ipInt shr 16 and 0xFF, ipInt shr 24 and 0xFF)
     }
 
-    suspend fun sendCommand(serverUrl: String, command: String): Result<JarvisCommandResponse> {
+    // --- UPDATED SEND COMMAND ---
+    suspend fun sendCommand(serverUrl: String, command: String, isConversation: Boolean = false): Result<JarvisCommandResponse> {
         return withContext(Dispatchers.IO) {
             try {
-                val requestBody = JarvisCommandRequest(command = command, token = apiToken)
+                val requestBody = JarvisCommandRequest(
+                    command = command,
+                    token = apiToken,
+                    conversation_mode = isConversation // <--- PASSING FLAG
+                )
                 val response: JarvisCommandResponse = client.post("$serverUrl/command") {
                     contentType(ContentType.Application.Json)
                     setBody(requestBody)
@@ -229,7 +239,6 @@ class JarvisApiClient(private val context: Context) {
         }
     }
 
-    // --- NEW: Send Command with Image ---
     suspend fun sendCommandWithImage(serverUrl: String, command: String, imageBytes: ByteArray): Result<JarvisCommandResponse> {
         return withContext(Dispatchers.IO) {
             try {

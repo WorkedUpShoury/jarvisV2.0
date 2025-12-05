@@ -41,7 +41,6 @@ import com.example.jarvisv2.ui.theme.DarkOnSurface
 import com.example.jarvisv2.ui.theme.DarkPrimary
 import com.example.jarvisv2.ui.theme.DarkSurface
 import com.example.jarvisv2.ui.theme.SystemMessage
-// --- UPDATED IMPORTS ---
 import com.example.jarvisv2.data.ChatMessage
 import com.example.jarvisv2.viewmodel.ChatSender
 import com.example.jarvisv2.viewmodel.MainViewModel
@@ -91,7 +90,8 @@ fun MainScreen(
             CommandInputBar(
                 text = commandText,
                 onTextChanged = viewModel::onCommandTextChanged,
-                onSend = viewModel::sendCurrentCommand,
+                // --- DISABLE CONVERSATION MODE (Standard Mode) ---
+                onSend = { viewModel.sendCurrentCommand(isConversation = false) },
                 suggestions = suggestions,
                 onSuggestionClick = { suggestion ->
                     viewModel.onCommandTextChanged(suggestion)

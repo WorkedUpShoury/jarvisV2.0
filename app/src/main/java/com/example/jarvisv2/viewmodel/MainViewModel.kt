@@ -1,8 +1,13 @@
 package com.example.jarvisv2.viewmodel
 
 import android.app.Application
+import android.content.Context
 import android.content.Intent
-import android.net.Uri // <--- NEW IMPORT
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
@@ -44,7 +49,6 @@ class MainViewModel(
     private val _commandText = MutableStateFlow("")
     private val _lastButtonCommand = MutableStateFlow<String?>(null)
 
-    // --- NEW: Image Upload State ---
     private val _selectedImageUri = MutableStateFlow<Uri?>(null)
     val selectedImageUri: StateFlow<Uri?> = _selectedImageUri.asStateFlow()
 
@@ -58,6 +62,19 @@ class MainViewModel(
 
     private var consecutiveFailures = 0
     private var discoveryJob: Job? = null
+
+    // --- CONNECTIVITY MONITORING ---
+    private val connectivityManager = app.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            // When WiFi connects, restart discovery immediately
+            startServerDiscovery()
+        }
+        override fun onLost(network: Network) {
+            _serverUrl.value = null
+            _isDiscovering.value = true
+        }
+    }
 
     val serverUrl: StateFlow<String?> = _serverUrl.asStateFlow()
     val isDiscovering: StateFlow<Boolean> = _isDiscovering.asStateFlow()
@@ -88,12 +105,32 @@ class MainViewModel(
         recentMediaSearches = mediaSearchRepository.recentSearches.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
         mostSearchedQuery = mediaSearchRepository.mostSearchedQuery.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
+        // Register Network Callback
+        val networkRequest = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .build()
+        try {
+            connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
         startServerDiscovery()
         observeVoiceServiceCommands()
         startHistoryPolling()
     }
 
+    override fun onCleared() {
+        super.onCleared()
+        try {
+            connectivityManager.unregisterNetworkCallback(networkCallback)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     private fun startServerDiscovery() {
+        // Cancel any existing job to ensure a fresh start
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
             _isDiscovering.value = true
@@ -101,9 +138,12 @@ class MainViewModel(
 
             apiClient.discoverJarvisService()
                 .catch { e ->
+                    // On error, wait and try again
                     _isDiscovering.value = false
                     delay(3000)
-                    startServerDiscovery()
+                    if (serverUrl.value == null) {
+                        startServerDiscovery()
+                    }
                 }
                 .collect { url ->
                     _serverUrl.value = url
@@ -158,7 +198,10 @@ class MainViewModel(
                                 },
                                 onFailure = {
                                     consecutiveFailures++
-                                    if (consecutiveFailures > 3) startServerDiscovery()
+                                    // If failing repeatedly, trigger a fresh discovery
+                                    if (consecutiveFailures > 3) {
+                                        startServerDiscovery()
+                                    }
                                     delay(3000)
                                 }
                             )
@@ -185,34 +228,29 @@ class MainViewModel(
 
     fun onCommandTextChanged(text: String) { _commandText.value = text }
 
-    // --- NEW: Image Selection ---
     fun onImageSelected(uri: Uri?) {
         _selectedImageUri.value = uri
     }
 
-    // --- UPDATED: Send Logic ---
-    fun sendCurrentCommand() {
+    // --- CONVERSATION MODE SUPPORT ---
+    fun sendCurrentCommand(isConversation: Boolean = false) {
         val command = _commandText.value.trim()
         val imageUri = _selectedImageUri.value
 
-        // Do nothing if both text and image are empty
         if (command.isEmpty() && imageUri == null) return
 
         if (imageUri != null) {
-            // Send with image
             val finalCommand = if (command.isEmpty()) "Analyze this image" else command
             sendImageCommand(finalCommand, imageUri)
         } else {
-            // Send text only
-            sendCommand(command)
+            sendCommand(command, isConversation)
         }
 
-        // Reset inputs
         _commandText.value = ""
         _selectedImageUri.value = null
     }
 
-    private fun sendCommand(command: String) {
+    private fun sendCommand(command: String, isConversation: Boolean = false) {
         val url = _serverUrl.value
         if (url == null) {
             viewModelScope.launch {
@@ -224,14 +262,13 @@ class MainViewModel(
 
         viewModelScope.launch {
             _lastCommandStatus.value = CommandStatus.Loading
-            apiClient.sendCommand(url, command).fold(
+            apiClient.sendCommand(url, command, isConversation).fold(
                 onSuccess = { _lastCommandStatus.value = CommandStatus.Success },
                 onFailure = { _lastCommandStatus.value = CommandStatus.Error(it.message ?: "Unknown error") }
             )
         }
     }
 
-    // --- NEW: Send Image Helper ---
     private fun sendImageCommand(command: String, uri: Uri) {
         val url = _serverUrl.value ?: return
         viewModelScope.launch(Dispatchers.IO) {
@@ -252,7 +289,6 @@ class MainViewModel(
         }
     }
 
-    // --- NEW: Compression Helper ---
     private fun getCompressedImageBytes(uri: Uri): ByteArray? {
         return try {
             val inputStream = app.contentResolver.openInputStream(uri)
@@ -262,7 +298,6 @@ class MainViewModel(
             if (bitmap == null) return null
 
             val outputStream = java.io.ByteArrayOutputStream()
-            // Compress to JPEG, Quality 70 to keep it light for LAN transfer
             bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 70, outputStream)
             outputStream.toByteArray()
         } catch (e: Exception) {
@@ -273,7 +308,7 @@ class MainViewModel(
 
     fun sendButtonCommand(command: String) {
         _lastButtonCommand.value = command
-        sendCommand(command)
+        sendCommand(command) // Standard mode
     }
 
     fun sendUdpCommand(message: String) {
